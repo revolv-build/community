@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Screenshots - Community{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1200px;">
+  <div class="flex-between mb-24">
+    <div>
+      <h1>Screenshots</h1>
+      <div class="sub" style="margin-bottom:0;">Preview all pages across device sizes</div>
+    </div>
+    <form method="POST" action="/admin/screenshots/capture">
+      <button class="btn btn-primary" id="capture-btn">Capture Screenshots</button>
+    </form>
+  </div>
+
+  {% if not manifest %}
+  <div class="card empty">
+    <div style="margin-bottom:12px;">No screenshots yet.</div>
+    <form method="POST" action="/admin/screenshots/capture">
+      <button class="btn btn-primary">Capture Now</button>
+    </form>
+  </div>
+  {% else %}
+
+  <!-- Page Tabs -->
+  <div class="ss-page-tabs">
+    {% for page_name in manifest %}
+    <button class="ss-page-tab {% if loop.first %}active{% endif %}" data-page="{{ page_name }}">{{ page_name | replace('-', ' ') | title }}</button>
+    {% endfor %}
+  </div>
+
+  <!-- Page Panels -->
+  {% for page_name, page_data in manifest.items() %}
+  <div class="ss-page-panel {% if loop.first %}active{% endif %}" id="panel-{{ page_name }}">
+
+    <!-- Device Sub-tabs -->
+    <div class="ss-device-tabs">
+      {% for device_name in page_data.devices %}
+      <button class="ss-device-tab {% if loop.first %}active{% endif %}" data-device="{{ device_name }}" data-page="{{ page_name }}">
+        <span class="ss-device-icon">
+          {% if device_name == 'mobile' %}&#9743;{% elif device_name == 'tablet' %}&#9645;{% elif device_name == 'laptop' %}&#9744;{% else %}&#9634;{% endif %}
+        </span>
+        {{ device_name | title }}
+        <span class="ss-device-size">
+          {% if device_name == 'mobile' %}375px{% elif device_name == 'tablet' %}768px{% elif device_name == 'laptop' %}1366px{% else %}1920px{% endif %}
+        </span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <!-- Device Screenshot Panels -->
+    {% for device_name, img_path in page_data.devices.items() %}
+    <div class="ss-device-panel {% if loop.first %}active{% endif %}" id="device-{{ page_name }}-{{ device_name }}">
+      <div class="ss-frame ss-frame-{{ device_name }}">
+        <img src="{{ url_for('static', filename=img_path) }}" alt="{{ page_name }} - {{ device_name }}" loading="lazy" />
+      </div>
+    </div>
+    {% endfor %}
+
+  </div>
+  {% endfor %}
+
+  {% endif %}
+</div>
+
+<style>
+/* ── Page Tabs ──────────────────────────────────────────────── */
+.ss-page-tabs { display: flex; gap: 2px; border-bottom: 1px solid #1e1e1e; margin-bottom: 0; overflow-x: auto; flex-wrap: nowrap; }
+.ss-page-tab { padding: 10px 16px; font-size: 12px; font-weight: 500; color: #555; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; font-family: inherit; transition: color .15s, border-color .15s; }
+.ss-page-tab:hover { color: #aaa; }
+.ss-page-tab.active { color: #fff; border-bottom-color: #fff; }
+
+/* ── Page Panels ────────────────────────────────────────────── */
+.ss-page-panel { display: none; }
+.ss-page-panel.active { display: block; }
+
+/* ── Device Sub-tabs ────────────────────────────────────────── */
+.ss-device-tabs { display: flex; gap: 8px; padding: 16px 0; }
+.ss-device-tab { display: flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 12px; color: #666; background: #141414; border: 1px solid #1e1e1e; border-radius: 8px; cursor: pointer; font-family: inherit; transition: all .15s; }
+.ss-device-tab:hover { border-color: #333; color: #aaa; }
+.ss-device-tab.active { background: #1a1a2a; border-color: #2a2a4a; color: #7070e0; }
+.ss-device-icon { font-size: 14px; }
+.ss-device-size { font-size: 10px; color: #444; }
+.ss-device-tab.active .ss-device-size { color: #5555aa; }
+
+/* ── Device Panels ──────────────────────────────────────────── */
+.ss-device-panel { display: none; }
+.ss-device-panel.active { display: block; }
+
+/* ── Screenshot Frame ───────────────────────────────────────── */
+.ss-frame { background: #0a0a0a; border: 1px solid #1e1e1e; border-radius: 10px; padding: 8px; overflow: auto; max-height: 80vh; }
+.ss-frame img { display: block; border-radius: 6px; width: 100%; height: auto; }
+.ss-frame-mobile { max-width: 400px; }
+.ss-frame-tablet { max-width: 800px; }
+.ss-frame-laptop { max-width: 100%; }
+.ss-frame-desktop { max-width: 100%; }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Page tabs
+  document.querySelectorAll('.ss-page-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.ss-page-tab').forEach(function(t) { t.classList.remove('active'); });
+      document.querySelectorAll('.ss-page-panel').forEach(function(p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.page).classList.add('active');
+    });
+  });
+
+  // Device sub-tabs
+  document.querySelectorAll('.ss-device-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var page = tab.dataset.page;
+      var device = tab.dataset.device;
+      var panel = document.getElementById('panel-' + page);
+      panel.querySelectorAll('.ss-device-tab').forEach(function(t) { t.classList.remove('active'); });
+      panel.querySelectorAll('.ss-device-panel').forEach(function(p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      document.getElementById('device-' + page + '-' + device).classList.add('active');
+    });
+  });
+});
+</script>
+{% endblock %}

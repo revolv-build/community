@@ -1,0 +1,90 @@
+{% extends "community/base.html" %}
+{% block title %}{{ event.title }} - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div class="card mb-24">
+    <div class="flex-between mb-16">
+      <div>
+        <div class="event-detail-date">
+          {{ event.event_date }}
+          {% if event.event_time %} at {{ event.event_time }}{% endif %}
+          {% if event.end_time %} – {{ event.end_time }}{% endif %}
+        </div>
+        <h1 style="margin-bottom:8px;">{{ event.title }}</h1>
+      </div>
+      {% if event.user_id == current_user.id or membership.role in ('owner', 'admin') %}
+      <div class="flex gap-8">
+        <a href="/c/{{ community.slug }}/events/{{ event.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
+        <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/delete" onsubmit="return confirm('Delete this event?')">
+          <button class="btn btn-danger btn-sm">Delete</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="event-info-grid mb-16">
+      {% if event.location %}
+      <div class="event-info-item">
+        <div class="label">Location</div>
+        <div>{{ event.location }}</div>
+      </div>
+      {% endif %}
+      <div class="event-info-item">
+        <div class="label">Type</div>
+        <span class="badge badge-{{ 'member' if event.location_type == 'in-person' else 'admin' }}">{{ event.location_type }}</span>
+      </div>
+      {% if event.link %}
+      <div class="event-info-item">
+        <div class="label">Link</div>
+        <a href="{{ event.link }}" target="_blank" rel="noopener" style="color:#7070e0;font-size:13px;">{{ event.link[:50] }}{{ '...' if event.link|length > 50 else '' }}</a>
+      </div>
+      {% endif %}
+      <div class="event-info-item">
+        <div class="label">Hosted by</div>
+        <a href="/c/{{ community.slug }}/members/{{ event.user_id }}" style="color:#eee;font-size:13px;">{{ event.creator_name }}</a>
+      </div>
+    </div>
+
+    {% if event.description %}
+    <div class="post-body">{{ event.description }}</div>
+    {% endif %}
+  </div>
+
+  <!-- RSVP -->
+  <div class="card mb-24">
+    <h2>RSVP</h2>
+    <div class="flex gap-8">
+      <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
+        <input type="hidden" name="status" value="going" />
+        <button class="btn {{ 'btn-primary' if not my_rsvp or my_rsvp.status != 'going' else 'btn-ghost' }}" style="{{ 'background:#1a3a1a;border:1px solid #2a5a2a;color:#5adb8a;' if my_rsvp and my_rsvp.status == 'going' else '' }}">Going</button>
+      </form>
+      <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
+        <input type="hidden" name="status" value="maybe" />
+        <button class="btn {{ 'btn-primary' if not my_rsvp or my_rsvp.status != 'maybe' else 'btn-ghost' }}" style="{{ 'background:#2a2a1a;border:1px solid #4a4a2a;color:#c0a040;' if my_rsvp and my_rsvp.status == 'maybe' else '' }}">Maybe</button>
+      </form>
+      <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
+        <input type="hidden" name="status" value="not-going" />
+        <button class="btn btn-ghost">Can't Go</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Attendees -->
+  <div class="card">
+    <h2>Attendees ({{ attendees | length }})</h2>
+    {% if attendees %}
+    <div class="attendee-list">
+      {% for a in attendees %}
+      <div class="attendee-item">
+        <div class="profile-avatar" style="width:32px;height:32px;font-size:13px;">{{ a.name[0] | upper }}</div>
+        <a href="/c/{{ community.slug }}/members/{{ a.id }}" style="color:#eee;font-size:13px;">{{ a.name }}</a>
+        <span class="badge badge-{{ 'owner' if a.status == 'going' else 'member' }}" style="margin-left:8px;">{{ a.status }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No RSVPs yet. Be the first!</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "community/base.html" %}
+{% block title %}Members - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page">
+  <h1>Members</h1>
+  <div class="sub">{{ members | length }} member{{ 's' if members | length != 1 else '' }} in {{ community.name }}</div>
+
+  <div class="search-bar">
+    <form method="GET">
+      <input name="q" value="{{ q or '' }}" placeholder="Search members..." />
+    </form>
+  </div>
+
+  {% if members %}
+  <div class="member-grid">
+    {% for m in members %}
+    <div class="member-card">
+      <div class="member-name"><a href="/c/{{ community.slug }}/members/{{ m.id }}">{{ m.name }}</a></div>
+      <div class="member-role"><span class="badge badge-{{ m.community_role }}">{{ m.community_role }}</span></div>
+      {% if m.bio %}
+      <div class="member-bio">{{ m.bio[:120] }}{{ '...' if m.bio|length > 120 else '' }}</div>
+      {% endif %}
+      <div class="member-meta">
+        {% if m.location %}{{ m.location }} &middot; {% endif %}
+        Joined {{ m.joined[:10] if m.joined else '—' }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">No members found.</div>
+  {% endif %}
+</div>
+{% endblock %}

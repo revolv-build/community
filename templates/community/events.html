@@ -1,0 +1,56 @@
+{% extends "community/base.html" %}
+{% block title %}Events - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page">
+  <div class="flex-between mb-24">
+    <div>
+      <h1>Events</h1>
+      <div class="sub" style="margin-bottom:0;">What's happening in {{ community.name }}</div>
+    </div>
+    <a href="/c/{{ community.slug }}/events/new" class="btn btn-primary">Create Event</a>
+  </div>
+
+  <!-- View Tabs -->
+  <div class="admin-tabs mb-24">
+    <a href="/c/{{ community.slug }}/events" class="admin-tab {{ 'active' if view == 'upcoming' else '' }}">Upcoming</a>
+    <a href="/c/{{ community.slug }}/events?view=past" class="admin-tab {{ 'active' if view == 'past' else '' }}">Past</a>
+    <a href="/c/{{ community.slug }}/events?view=calendar" class="admin-tab {{ 'active' if view == 'calendar' else '' }}">Calendar</a>
+  </div>
+
+  {% if events %}
+    {% for e in events %}
+    <a href="/c/{{ community.slug }}/events/{{ e.id }}" class="event-card">
+      <div class="event-date-badge">
+        <div class="event-date-month">{{ e.event_date[5:7] | int }}{% set months = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}{{ '' }}</div>
+        <div class="event-date-day">{{ e.event_date[8:10] | int }}</div>
+      </div>
+      <div class="event-card-body">
+        <div class="event-card-title">{{ e.title }}</div>
+        <div class="event-card-meta">
+          {% if e.event_time %}{{ e.event_time }}{% if e.end_time %} – {{ e.end_time }}{% endif %} &middot; {% endif %}
+          {% if e.location %}{{ e.location }} &middot; {% endif %}
+          <span class="badge badge-{{ 'member' if e.location_type == 'in-person' else 'admin' }}">{{ e.location_type }}</span>
+          &middot; {{ e.going_count }} going
+        </div>
+        {% if e.description %}
+        <div class="event-card-desc">{{ e.description[:150] }}{{ '...' if e.description|length > 150 else '' }}</div>
+        {% endif %}
+      </div>
+      {% if my_rsvps.get(e.id) %}
+      <div class="event-card-rsvp">
+        <span class="badge badge-{{ 'owner' if my_rsvps[e.id] == 'going' else 'member' }}">{{ my_rsvps[e.id] }}</span>
+      </div>
+      {% endif %}
+    </a>
+    {% endfor %}
+  {% else %}
+    <div class="card empty">
+      {% if view == 'past' %}
+        No past events.
+      {% else %}
+        No upcoming events. Create one to get things started!
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

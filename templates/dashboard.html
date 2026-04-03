@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Community{% endblock %}
+{% block content %}
+<div class="page">
+  <div class="flex-between mb-24">
+    <div>
+      <h1>Your Communities</h1>
+      <div class="sub" style="margin-bottom:0;">Spaces you own or belong to</div>
+    </div>
+    <a href="/communities/new" class="btn btn-primary">Create Community</a>
+  </div>
+
+  {% if communities %}
+  <div class="member-grid">
+    {% for c in communities %}
+    <a href="/c/{{ c.slug }}/" class="community-card">
+      <div class="community-card-icon">{{ c.name[0] | upper }}</div>
+      <div>
+        <div class="community-card-name">{{ c.name }}</div>
+        <div class="community-card-meta">
+          <span class="badge badge-{{ c.my_role }}">{{ c.my_role }}</span>
+        </div>
+        {% if c.description %}
+        <div class="community-card-desc">{{ c.description[:100] }}{{ '...' if c.description|length > 100 else '' }}</div>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">
+    <div style="margin-bottom:12px;">You haven't joined any communities yet.</div>
+    <a href="/communities/new" class="btn btn-primary">Create Your First Community</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

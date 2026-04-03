@@ -1,0 +1,44 @@
+{% extends "community/base.html" %}
+{% block title %}Create Poll - Insight Loop{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div style="margin-bottom:8px;"><a href="/c/{{ community.slug }}/insights" style="font-size:12px;color:#7070e0;">← Back to Insight Loop</a></div>
+  <h1>Create Poll</h1>
+  <div class="sub">Ask your community for market insights</div>
+
+  <form method="POST" id="poll-form">
+    <div class="card mb-16">
+      <div class="field"><div class="label">Poll Title</div><input name="title" placeholder="e.g. Product Feedback Q2, Market Trends Survey" required /></div>
+      <div class="field"><div class="label">Description (optional)</div><textarea name="description" style="min-height:60px;" placeholder="What's this poll about?"></textarea></div>
+      <div class="field"><div class="label">Points Reward</div><input name="points_reward" type="number" value="10" min="1" style="max-width:120px;" /></div>
+    </div>
+
+    <h2 class="mb-16">Questions</h2>
+    <div id="questions-container"></div>
+
+    <button type="button" class="btn btn-ghost mb-16" onclick="addQuestion()">+ Add Question</button>
+    <br>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;">Create Poll</button>
+  </form>
+</div>
+
+<script>
+var qIndex = 0;
+function addQuestion() {
+  var html = '<div class="card mb-12 il-q-editor" id="qcard-' + qIndex + '">';
+  html += '<div class="flex-between mb-12"><div class="label" style="margin:0;">Question ' + (qIndex + 1) + '</div><button type="button" class="row-ctrl-btn row-ctrl-del" onclick="document.getElementById(\'qcard-' + qIndex + '\').remove()">&times;</button></div>';
+  html += '<div class="field"><input name="question_' + qIndex + '" placeholder="Your question..." required /></div>';
+  html += '<div class="field"><div class="label">Type</div><select name="type_' + qIndex + '" onchange="toggleOptions(this,' + qIndex + ')">';
+  html += '<option value="text">Open Text</option><option value="choice">Multiple Choice</option><option value="rating">Rating (1-10)</option>';
+  html += '</select></div>';
+  html += '<div class="field" id="opts-' + qIndex + '" style="display:none;"><div class="label">Options (separate with |)</div><input name="options_' + qIndex + '" placeholder="Option A | Option B | Option C" /></div>';
+  html += '</div>';
+  document.getElementById('questions-container').insertAdjacentHTML('beforeend', html);
+  qIndex++;
+}
+function toggleOptions(sel, idx) {
+  document.getElementById('opts-' + idx).style.display = sel.value === 'choice' ? '' : 'none';
+}
+addQuestion();
+</script>
+{% endblock %}

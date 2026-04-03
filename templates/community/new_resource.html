@@ -1,0 +1,47 @@
+{% extends "community/base.html" %}
+{% block title %}Add Resource - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <h1>Add Resource</h1>
+  <div class="sub">Share a file, video, or link with {{ community.name }}</div>
+
+  <div class="card">
+    <form method="POST" enctype="multipart/form-data">
+      <div class="field">
+        <div class="label">Title</div>
+        <input name="title" placeholder="e.g. Brand Guidelines, Onboarding Video, Useful Article" required autofocus />
+      </div>
+      <div class="field">
+        <div class="label">Description</div>
+        <textarea name="description" style="min-height:80px;" placeholder="What is this resource about?"></textarea>
+      </div>
+
+      <div class="card" style="background:#0a0a0a;margin-bottom:16px;">
+        <h3 style="margin-bottom:12px;">Upload a File</h3>
+        <div class="field" style="margin-bottom:0;">
+          <input name="file" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.csv,.zip,.png,.jpg,.jpeg,.gif,.svg,.mp4,.mov,.webm" />
+          <div style="font-size:11px;color:#444;margin-top:6px;">PDF, documents, images, videos — max 50 MB</div>
+        </div>
+      </div>
+
+      <div class="card" style="background:#0a0a0a;margin-bottom:16px;">
+        <h3 style="margin-bottom:12px;">Or Paste a Link</h3>
+        <div class="field" style="margin-bottom:0;">
+          <input name="url" placeholder="https://... (YouTube, Vimeo, Loom, or any URL)" />
+          <div style="font-size:11px;color:#444;margin-top:6px;">YouTube, Vimeo, and Loom videos will embed automatically</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Tags (comma-separated)</div>
+        <input name="tags" placeholder="e.g. design, onboarding, templates" />
+      </div>
+
+      <div class="flex gap-8">
+        <button class="btn btn-primary">Add Resource</button>
+        <a href="/c/{{ community.slug }}/resources" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Join {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-narrow" style="text-align:center;">
+  <div style="font-size:48px;margin-bottom:16px;">&#9672;</div>
+  <h1>{{ community.name }}</h1>
+  {% if community.description %}
+  <p class="sub">{{ community.description }}</p>
+  {% endif %}
+  <div class="card" style="text-align:left;">
+    <p style="color:#999;font-size:13px;margin-bottom:16px;">You've been invited to join this community. Click below to become a member.</p>
+    <form method="POST">
+      <button class="btn btn-primary" style="width:100%;justify-content:center;">Join {{ community.name }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

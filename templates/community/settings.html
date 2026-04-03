@@ -1,0 +1,167 @@
+{% extends "community/base.html" %}
+{% block title %}Settings - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page">
+  <h1>Community Settings</h1>
+  <div class="sub">Manage {{ community.name }}</div>
+
+  <!-- Stats -->
+  <div class="stats-grid stats-grid-6 mb-24">
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_members }}</div>
+      <div class="stat-label">Members</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_posts }}</div>
+      <div class="stat-label">Posts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_comments }}</div>
+      <div class="stat-label">Comments</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_events }}</div>
+      <div class="stat-label">Events</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.new_members_7d }}</div>
+      <div class="stat-label">New this week</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="admin-tabs mb-24">
+    <a href="/c/{{ community.slug }}/settings" class="admin-tab {{ 'active' if tab == 'overview' else '' }}">Members</a>
+    <a href="/c/{{ community.slug }}/settings?tab=activity" class="admin-tab {{ 'active' if tab == 'activity' else '' }}">Activity</a>
+    <a href="/c/{{ community.slug }}/settings?tab=general" class="admin-tab {{ 'active' if tab == 'general' else '' }}">General</a>
+  </div>
+
+  {% if tab == 'activity' %}
+  <!-- Activity Feed -->
+  <div class="card">
+    <h2>Recent Activity</h2>
+    {% if activity %}
+    <div class="activity-feed">
+      {% for item in activity %}
+      <div class="activity-item">
+        <div class="activity-icon activity-icon-{{ 'signup' if item.type == 'join' else item.type }}">
+          {% if item.type == 'join' %}+{% elif item.type == 'post' %}P{% elif item.type == 'comment' %}C{% endif %}
+        </div>
+        <div class="activity-content">
+          <div class="activity-text">
+            {% if item.type == 'join' %}
+              <a href="/c/{{ community.slug }}/members/{{ item.user_id }}">{{ item.user_name }}</a> joined the community
+            {% elif item.type == 'post' %}
+              <a href="/c/{{ community.slug }}/members/{{ item.user_id }}">{{ item.user_name }}</a> posted <a href="/c/{{ community.slug }}/posts/{{ item.target_id }}">{{ item.title }}</a>
+            {% elif item.type == 'comment' %}
+              <a href="/c/{{ community.slug }}/members/{{ item.user_id }}">{{ item.user_name }}</a> commented on <a href="/c/{{ community.slug }}/posts/{{ item.target_id }}">{{ item.title }}</a>
+            {% endif %}
+          </div>
+          <div class="activity-time">{{ item.created[:16] | replace('T', ' at ') }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No activity yet.</div>
+    {% endif %}
+  </div>
+
+  {% elif tab == 'general' %}
+  <!-- General Settings -->
+  <div class="card mb-24">
+    <h2>Community Details</h2>
+    <form method="POST" action="/c/{{ community.slug }}/settings/update" enctype="multipart/form-data">
+      <div class="field"><div class="label">Name</div><input name="name" value="{{ community.name }}" required /></div>
+      <div class="field"><div class="label">Description</div><textarea name="description">{{ community.description or '' }}</textarea></div>
+      <div class="field">
+        <div class="label">Banner Image</div>
+        {% if community.banner_path %}
+        <div style="margin-bottom:8px;border-radius:4px;overflow:hidden;max-height:120px;">
+          <img src="/uploads/{{ community.banner_path }}" style="width:100%;object-fit:cover;" />
+        </div>
+        {% endif %}
+        <input name="banner" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+        <div style="font-size:11px;color:#444;margin-top:4px;">Recommended: 1400x400px. JPG, PNG, or WebP.</div>
+      </div>
+      <button class="btn btn-primary">Save</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Invite Link</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Share this link to let people join your community:</p>
+    <input value="{{ request.host_url }}join/{{ community.slug }}" onclick="this.select()" readonly style="background:#0a0a0a;color:#7070e0;" />
+  </div>
+
+  <div class="card">
+    <h2>Insight Loop</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Enable polls, points, and rewards for your community.</p>
+    <form method="POST" action="/c/{{ community.slug }}/insights/toggle">
+      <button class="btn {{ 'btn-danger' if community.insights_enabled else 'btn-primary' }}">
+        {{ 'Disable Insight Loop' if community.insights_enabled else 'Enable Insight Loop' }}
+      </button>
+    </form>
+  </div>
+
+  {% else %}
+  <!-- Members Table -->
+  <div class="card mb-16">
+    <h2>Add Member</h2>
+    <form method="POST" action="/c/{{ community.slug }}/settings/invite" style="display:flex;gap:10px;align-items:end;">
+      <div style="flex:1;"><div class="label">Email</div><input name="email" type="email" placeholder="user@example.com" required /></div>
+      <div><div class="label">Role</div>
+        <select name="role">
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div style="padding-top:18px;"><button class="btn btn-primary">Add</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="flex-between mb-16">
+      <h2 style="margin-bottom:0;">Members ({{ members | length }})</h2>
+      <div class="search-bar" style="margin-bottom:0;">
+        <form method="GET">
+          <input name="q" value="{{ q or '' }}" placeholder="Search..." style="max-width:200px;" />
+        </form>
+      </div>
+    </div>
+    <table>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th>Posts</th><th>Comments</th><th>Joined</th><th></th></tr>
+      {% for u in members %}
+      <tr>
+        <td><a href="/c/{{ community.slug }}/members/{{ u.id }}" style="color:#eee;">{{ u.name }}</a></td>
+        <td>{{ u.email }}</td>
+        <td>
+          {% if u.community_role == 'owner' %}
+          <span class="badge badge-owner">owner</span>
+          {% elif u.id != current_user.id %}
+          <form method="POST" action="/c/{{ community.slug }}/settings/role/{{ u.id }}" style="display:inline;">
+            <select name="role" onchange="this.form.submit()" style="width:auto;padding:4px 8px;font-size:11px;">
+              <option value="member" {{ 'selected' if u.community_role == 'member' else '' }}>member</option>
+              <option value="admin" {{ 'selected' if u.community_role == 'admin' else '' }}>admin</option>
+            </select>
+          </form>
+          {% else %}
+          <span class="badge badge-{{ u.community_role }}">{{ u.community_role }}</span>
+          {% endif %}
+        </td>
+        <td>{{ u.post_count }}</td>
+        <td>{{ u.comment_count }}</td>
+        <td>{{ u.joined[:10] if u.joined else '—' }}</td>
+        <td style="text-align:right;">
+          {% if u.community_role != 'owner' and u.id != current_user.id %}
+          <form method="POST" action="/c/{{ community.slug }}/settings/remove/{{ u.id }}" style="display:inline;" onsubmit="return confirm('Remove {{ u.name }}?')">
+            <button class="btn btn-danger btn-sm">Remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

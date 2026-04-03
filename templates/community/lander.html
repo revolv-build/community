@@ -1,0 +1,385 @@
+{% extends "community/base.html" %}
+{% block title %}Lander - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1100px;">
+  <div class="flex-between mb-16">
+    <div>
+      <h1>Landing Page Builder</h1>
+      <div class="sub" style="margin-bottom:0;">Drag rows to build your community's public site</div>
+    </div>
+    <div class="flex gap-8">
+      <a href="/c/{{ community.slug }}/site" target="_blank" class="btn btn-ghost">Preview</a>
+      <button class="btn btn-primary" id="save-btn" onclick="saveLander()">Save</button>
+    </div>
+  </div>
+
+  <div class="lander-editor">
+    <!-- Row Palette -->
+    <div class="lander-palette">
+      <div class="lander-palette-title">Drag to add</div>
+
+      <div class="palette-item" draggable="true" data-type="hero">
+        <div class="palette-sil palette-sil-hero">
+          <div class="sil-bar sil-bar-lg"></div>
+          <div class="sil-bar sil-bar-md"></div>
+          <div class="sil-bar sil-bar-btn"></div>
+        </div>
+        <span>Hero</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="text">
+        <div class="palette-sil palette-sil-text">
+          <div class="sil-bar sil-bar-md"></div>
+          <div class="sil-bar sil-bar-full"></div>
+          <div class="sil-bar sil-bar-full"></div>
+        </div>
+        <span>Text Block</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="features">
+        <div class="palette-sil palette-sil-features">
+          <div class="sil-col"></div>
+          <div class="sil-col"></div>
+          <div class="sil-col"></div>
+        </div>
+        <span>Features</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="cta">
+        <div class="palette-sil palette-sil-cta">
+          <div class="sil-bar sil-bar-md"></div>
+          <div class="sil-bar sil-bar-btn"></div>
+        </div>
+        <span>CTA Banner</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="testimonial">
+        <div class="palette-sil palette-sil-testimonial">
+          <div class="sil-circle"></div>
+          <div class="sil-bar sil-bar-full"></div>
+          <div class="sil-bar sil-bar-sm"></div>
+        </div>
+        <span>Testimonial</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="stats">
+        <div class="palette-sil palette-sil-stats">
+          <div class="sil-col sil-col-stat"></div>
+          <div class="sil-col sil-col-stat"></div>
+          <div class="sil-col sil-col-stat"></div>
+          <div class="sil-col sil-col-stat"></div>
+        </div>
+        <span>Stats</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="faq">
+        <div class="palette-sil palette-sil-faq">
+          <div class="sil-bar sil-bar-full"></div>
+          <div class="sil-bar sil-bar-full"></div>
+          <div class="sil-bar sil-bar-full"></div>
+        </div>
+        <span>FAQ</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="image">
+        <div class="palette-sil palette-sil-image">
+          <div class="sil-img-placeholder"></div>
+        </div>
+        <span>Image</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="spacer">
+        <div class="palette-sil palette-sil-spacer">
+          <div class="sil-bar sil-bar-thin"></div>
+        </div>
+        <span>Spacer</span>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="lander-canvas" id="canvas">
+      <div class="canvas-empty" id="canvas-empty">
+        Drag rows here to start building
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var SLUG = '{{ community.slug }}';
+var rows = {{ config | safe }};
+
+var DEFAULTS = {
+  hero: {title:'Your Community Name', subtitle:'A short description of what this community is about.', btn_text:'Join Now', btn_url:'/join/'+SLUG, bg_color:'#0c0c14'},
+  text: {heading:'About Us', body:'Tell visitors what makes your community special. What will they learn? Who is it for?'},
+  features: {heading:'What You Get', items:[{icon:'🎯',title:'Discussions',desc:'Ask questions and get answers from the community.'},{icon:'📅',title:'Events',desc:'Regular workshops, AMAs, and meetups.'},{icon:'📚',title:'Resources',desc:'Curated library of files, videos, and links.'}]},
+  cta: {heading:'Ready to join?', subtitle:'Become a member today.', btn_text:'Join the Community', btn_url:'/join/'+SLUG, bg_color:'#1a1a2a'},
+  testimonial: {quote:'This community has been incredible for my growth. The discussions are always insightful and the events are top-notch.', author:'Member Name', role:'Role / Company'},
+  stats: {items:[{value:'500+',label:'Members'},{value:'1,200',label:'Posts'},{value:'50+',label:'Events'},{value:'98%',label:'Satisfaction'}]},
+  faq: {heading:'FAQ', items:[{q:'Who is this community for?',a:'Anyone interested in the topic who wants to learn and connect with others.'},{q:'Is it free?',a:'Yes! Join and start participating immediately.'},{q:'How do I get involved?',a:'Sign up, introduce yourself, and start posting.'}]},
+  image: {url:'', caption:''},
+  spacer: {height:48}
+};
+
+var canvas = document.getElementById('canvas');
+var emptyMsg = document.getElementById('canvas-empty');
+
+function uid() { return 'r' + Math.random().toString(36).substr(2, 9); }
+
+function renderRow(row) {
+  var el = document.createElement('div');
+  el.className = 'canvas-row';
+  el.draggable = true;
+  el.dataset.id = row.id;
+
+  var controls = '<div class="row-controls">';
+  controls += '<button class="row-ctrl-btn" onclick="moveRow(\'' + row.id + '\',-1)" title="Move up">&#9650;</button>';
+  controls += '<button class="row-ctrl-btn" onclick="moveRow(\'' + row.id + '\',1)" title="Move down">&#9660;</button>';
+  controls += '<button class="row-ctrl-btn" onclick="editRow(\'' + row.id + '\')" title="Edit">&#9998;</button>';
+  controls += '<button class="row-ctrl-btn row-ctrl-del" onclick="deleteRow(\'' + row.id + '\')" title="Delete">&times;</button>';
+  controls += '</div>';
+
+  var preview = '';
+  var d = row.data;
+  switch(row.type) {
+    case 'hero':
+      preview = '<div class="rp rp-hero" style="background:' + (d.bg_color||'#0c0c14') + '"><div class="rp-hero-title">' + esc(d.title) + '</div><div class="rp-hero-sub">' + esc(d.subtitle) + '</div><div class="rp-hero-btn">' + esc(d.btn_text) + '</div></div>';
+      break;
+    case 'text':
+      preview = '<div class="rp rp-text"><div class="rp-heading">' + esc(d.heading) + '</div><div class="rp-body">' + esc(d.body).substring(0,120) + '</div></div>';
+      break;
+    case 'features':
+      preview = '<div class="rp rp-features"><div class="rp-heading">' + esc(d.heading) + '</div><div class="rp-feat-grid">';
+      (d.items||[]).forEach(function(f) { preview += '<div class="rp-feat"><span class="rp-feat-icon">' + f.icon + '</span><strong>' + esc(f.title) + '</strong></div>'; });
+      preview += '</div></div>';
+      break;
+    case 'cta':
+      preview = '<div class="rp rp-cta" style="background:' + (d.bg_color||'#1a1a2a') + '"><div class="rp-heading">' + esc(d.heading) + '</div><div class="rp-hero-btn">' + esc(d.btn_text) + '</div></div>';
+      break;
+    case 'testimonial':
+      preview = '<div class="rp rp-testimonial"><div class="rp-quote">"' + esc(d.quote).substring(0,80) + '..."</div><div class="rp-author">' + esc(d.author) + '</div></div>';
+      break;
+    case 'stats':
+      preview = '<div class="rp rp-stats"><div class="rp-stat-grid">';
+      (d.items||[]).forEach(function(s) { preview += '<div class="rp-stat"><div class="rp-stat-val">' + esc(s.value) + '</div><div class="rp-stat-lbl">' + esc(s.label) + '</div></div>'; });
+      preview += '</div></div>';
+      break;
+    case 'faq':
+      preview = '<div class="rp rp-faq"><div class="rp-heading">' + esc(d.heading) + '</div><div class="rp-faq-count">' + (d.items||[]).length + ' questions</div></div>';
+      break;
+    case 'image':
+      preview = '<div class="rp rp-image">' + (d.url ? '<img src="'+esc(d.url)+'" style="max-width:100%;max-height:80px;border-radius:4px;">' : '<span style="color:#555">No image set</span>') + '</div>';
+      break;
+    case 'spacer':
+      preview = '<div class="rp rp-spacer"><span style="color:#333">— Spacer (' + (d.height||48) + 'px) —</span></div>';
+      break;
+  }
+
+  el.innerHTML = '<div class="row-type-badge">' + row.type + '</div>' + controls + preview;
+
+  // Drag events for reordering
+  el.addEventListener('dragstart', function(e) { e.dataTransfer.setData('text/plain', row.id); el.classList.add('dragging'); });
+  el.addEventListener('dragend', function() { el.classList.remove('dragging'); });
+
+  return el;
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function renderCanvas() {
+  canvas.innerHTML = '';
+  if (rows.length === 0) {
+    canvas.appendChild(emptyMsg);
+    emptyMsg.style.display = '';
+    return;
+  }
+  emptyMsg.style.display = 'none';
+  rows.forEach(function(row) { canvas.appendChild(renderRow(row)); });
+}
+
+function addRow(type, index) {
+  var data = JSON.parse(JSON.stringify(DEFAULTS[type] || {}));
+  var row = {id: uid(), type: type, data: data};
+  if (typeof index === 'number') rows.splice(index, 0, row);
+  else rows.push(row);
+  renderCanvas();
+}
+
+function deleteRow(id) {
+  rows = rows.filter(function(r) { return r.id !== id; });
+  renderCanvas();
+}
+
+function moveRow(id, dir) {
+  var i = rows.findIndex(function(r) { return r.id === id; });
+  if (i < 0) return;
+  var ni = i + dir;
+  if (ni < 0 || ni >= rows.length) return;
+  var tmp = rows[i]; rows[i] = rows[ni]; rows[ni] = tmp;
+  renderCanvas();
+}
+
+// Edit modal
+function editRow(id) {
+  var row = rows.find(function(r) { return r.id === id; });
+  if (!row) return;
+  var d = row.data;
+  var html = '<div class="edit-modal-bg" onclick="if(event.target===this)closeEdit()"><div class="edit-modal"><div class="edit-modal-header"><h2 style="margin:0;">Edit ' + row.type + '</h2><button onclick="closeEdit()" style="background:none;border:none;color:#666;font-size:20px;cursor:pointer;">&times;</button></div><div class="edit-modal-body" id="edit-fields"></div><div class="edit-modal-footer"><button class="btn btn-primary" onclick="saveEdit()">Apply</button></div></div></div>';
+  var container = document.createElement('div');
+  container.id = 'edit-overlay';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  window._editRowId = id;
+
+  var fields = document.getElementById('edit-fields');
+  var fhtml = '';
+  switch(row.type) {
+    case 'hero':
+      fhtml += field('title', 'Title', d.title);
+      fhtml += field('subtitle', 'Subtitle', d.subtitle);
+      fhtml += field('btn_text', 'Button Text', d.btn_text);
+      fhtml += field('btn_url', 'Button URL', d.btn_url);
+      fhtml += field('bg_color', 'Background Color', d.bg_color, 'color');
+      break;
+    case 'text':
+      fhtml += field('heading', 'Heading', d.heading);
+      fhtml += area('body', 'Body Text', d.body);
+      break;
+    case 'features':
+      fhtml += field('heading', 'Heading', d.heading);
+      (d.items||[]).forEach(function(f, i) {
+        fhtml += '<div class="edit-group"><div class="label">Feature ' + (i+1) + '</div>';
+        fhtml += '<div style="display:grid;grid-template-columns:50px 1fr 1fr;gap:8px;">';
+        fhtml += '<input data-field="items.' + i + '.icon" value="' + esc(f.icon) + '" placeholder="Emoji">';
+        fhtml += '<input data-field="items.' + i + '.title" value="' + esc(f.title) + '" placeholder="Title">';
+        fhtml += '<input data-field="items.' + i + '.desc" value="' + esc(f.desc) + '" placeholder="Description">';
+        fhtml += '</div></div>';
+      });
+      break;
+    case 'cta':
+      fhtml += field('heading', 'Heading', d.heading);
+      fhtml += field('subtitle', 'Subtitle', d.subtitle);
+      fhtml += field('btn_text', 'Button Text', d.btn_text);
+      fhtml += field('btn_url', 'Button URL', d.btn_url);
+      fhtml += field('bg_color', 'Background Color', d.bg_color, 'color');
+      break;
+    case 'testimonial':
+      fhtml += area('quote', 'Quote', d.quote);
+      fhtml += field('author', 'Author Name', d.author);
+      fhtml += field('role', 'Role / Company', d.role);
+      break;
+    case 'stats':
+      (d.items||[]).forEach(function(s, i) {
+        fhtml += '<div class="edit-group"><div class="label">Stat ' + (i+1) + '</div>';
+        fhtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
+        fhtml += '<input data-field="items.' + i + '.value" value="' + esc(s.value) + '" placeholder="Value">';
+        fhtml += '<input data-field="items.' + i + '.label" value="' + esc(s.label) + '" placeholder="Label">';
+        fhtml += '</div></div>';
+      });
+      break;
+    case 'faq':
+      fhtml += field('heading', 'Heading', d.heading);
+      (d.items||[]).forEach(function(f, i) {
+        fhtml += '<div class="edit-group"><div class="label">Q&A ' + (i+1) + '</div>';
+        fhtml += '<input data-field="items.' + i + '.q" value="' + esc(f.q) + '" placeholder="Question" style="margin-bottom:6px;">';
+        fhtml += '<textarea data-field="items.' + i + '.a" placeholder="Answer" style="min-height:50px;">' + esc(f.a) + '</textarea>';
+        fhtml += '</div>';
+      });
+      fhtml += '<button class="btn btn-ghost btn-sm" onclick="addFaqItem()">+ Add Question</button>';
+      break;
+    case 'image':
+      fhtml += field('url', 'Image URL', d.url);
+      fhtml += field('caption', 'Caption', d.caption);
+      break;
+    case 'spacer':
+      fhtml += field('height', 'Height (px)', d.height, 'number');
+      break;
+  }
+  fields.innerHTML = fhtml;
+}
+
+function field(name, label, val, type) {
+  return '<div class="edit-group"><div class="label">' + label + '</div><input data-field="' + name + '" value="' + esc(val||'') + '" type="' + (type||'text') + '"></div>';
+}
+function area(name, label, val) {
+  return '<div class="edit-group"><div class="label">' + label + '</div><textarea data-field="' + name + '" style="min-height:80px;">' + esc(val||'') + '</textarea></div>';
+}
+
+function closeEdit() { var el = document.getElementById('edit-overlay'); if (el) el.remove(); }
+
+function saveEdit() {
+  var row = rows.find(function(r) { return r.id === window._editRowId; });
+  if (!row) return;
+  document.querySelectorAll('#edit-fields [data-field]').forEach(function(input) {
+    var path = input.dataset.field.split('.');
+    var obj = row.data;
+    for (var i = 0; i < path.length - 1; i++) {
+      var key = isNaN(path[i]) ? path[i] : parseInt(path[i]);
+      obj = obj[key];
+    }
+    var lastKey = isNaN(path[path.length-1]) ? path[path.length-1] : parseInt(path[path.length-1]);
+    obj[lastKey] = input.value;
+  });
+  closeEdit();
+  renderCanvas();
+}
+
+function addFaqItem() {
+  var row = rows.find(function(r) { return r.id === window._editRowId; });
+  if (!row) return;
+  row.data.items.push({q:'New question?', a:'Answer here.'});
+  closeEdit();
+  editRow(row.id);
+}
+
+// Drag from palette
+document.querySelectorAll('.palette-item').forEach(function(item) {
+  item.addEventListener('dragstart', function(e) {
+    e.dataTransfer.setData('text/plain', 'new:' + item.dataset.type);
+  });
+});
+
+// Canvas drop zone
+canvas.addEventListener('dragover', function(e) { e.preventDefault(); canvas.classList.add('canvas-dragover'); });
+canvas.addEventListener('dragleave', function() { canvas.classList.remove('canvas-dragover'); });
+canvas.addEventListener('drop', function(e) {
+  e.preventDefault();
+  canvas.classList.remove('canvas-dragover');
+  var data = e.dataTransfer.getData('text/plain');
+  if (data.startsWith('new:')) {
+    addRow(data.replace('new:', ''));
+  } else {
+    // Reorder existing row
+    var draggedId = data;
+    var dropY = e.clientY;
+    var newIndex = rows.length;
+    var rowEls = canvas.querySelectorAll('.canvas-row');
+    for (var i = 0; i < rowEls.length; i++) {
+      var rect = rowEls[i].getBoundingClientRect();
+      if (dropY < rect.top + rect.height / 2) { newIndex = i; break; }
+    }
+    var oldIndex = rows.findIndex(function(r) { return r.id === draggedId; });
+    if (oldIndex >= 0) {
+      var item = rows.splice(oldIndex, 1)[0];
+      if (newIndex > oldIndex) newIndex--;
+      rows.splice(newIndex, 0, item);
+      renderCanvas();
+    }
+  }
+});
+
+function saveLander() {
+  var btn = document.getElementById('save-btn');
+  btn.textContent = 'Saving...';
+  fetch('/c/' + SLUG + '/lander/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(rows)
+  }).then(function(r) { return r.json(); })
+  .then(function() { btn.textContent = 'Saved!'; setTimeout(function() { btn.textContent = 'Save'; }, 1500); })
+  .catch(function() { btn.textContent = 'Error'; setTimeout(function() { btn.textContent = 'Save'; }, 1500); });
+}
+
+renderCanvas();
+</script>
+{% endblock %}

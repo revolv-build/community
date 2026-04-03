@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ community.name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='site.css') }}">
+</head>
+<body class="site-body">
+  <nav class="site-nav">
+    <span class="site-nav-logo">&#9672; {{ community.name }}</span>
+    <div class="site-nav-links">
+      {% if session.get('user_id') %}
+      <a href="/c/{{ community.slug }}/">Enter Community</a>
+      {% else %}
+      <a href="/login">Sign In</a>
+      <a href="/join/{{ community.slug }}" class="btn btn-primary" style="padding:6px 18px;">Join</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  {% if not rows %}
+  <div class="site-empty">
+    <h1>{{ community.name }}</h1>
+    <p>{{ community.description or 'Welcome to our community.' }}</p>
+    <a href="/join/{{ community.slug }}" class="btn btn-primary" style="padding:12px 32px;font-size:15px;">Join Now</a>
+  </div>
+  {% else %}
+
+  {% for row in rows %}
+  {% set d = row['data'] %}
+
+  {% if row.type == 'hero' %}
+  <section class="site-hero" style="background:{{ d.bg_color or '#0c0c14' }};">
+    <div class="site-hero-inner">
+      <h1 class="site-hero-title">{{ d.title }}</h1>
+      <p class="site-hero-sub">{{ d.subtitle }}</p>
+      {% if d.btn_text %}
+      <a href="{{ d.btn_url or '#' }}" class="btn btn-primary site-hero-btn">{{ d.btn_text }}</a>
+      {% endif %}
+    </div>
+  </section>
+
+  {% elif row.type == 'text' %}
+  <section class="site-section">
+    <div class="site-container">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      <div class="site-text">{{ d.body }}</div>
+    </div>
+  </section>
+
+  {% elif row.type == 'features' %}
+  <section class="site-section">
+    <div class="site-container">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      <div class="site-features-grid">
+        {% for f in d['items'] %}
+        <div class="site-feature">
+          <div class="site-feature-icon">{{ f.icon }}</div>
+          <h3>{{ f.title }}</h3>
+          <p>{{ f.desc }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'cta' %}
+  <section class="site-cta" style="background:{{ d.bg_color or '#1a1a2a' }};">
+    <div class="site-container" style="text-align:center;">
+      <h2 class="site-heading" style="color:#fff;">{{ d.heading }}</h2>
+      {% if d.subtitle %}<p class="site-cta-sub">{{ d.subtitle }}</p>{% endif %}
+      {% if d.btn_text %}
+      <a href="{{ d.btn_url or '#' }}" class="btn btn-primary site-hero-btn">{{ d.btn_text }}</a>
+      {% endif %}
+    </div>
+  </section>
+
+  {% elif row.type == 'testimonial' %}
+  <section class="site-section">
+    <div class="site-container" style="max-width:640px;">
+      <div class="site-testimonial">
+        <div class="site-testimonial-quote">"{{ d.quote }}"</div>
+        <div class="site-testimonial-author">{{ d.author }}</div>
+        {% if d.role %}<div class="site-testimonial-role">{{ d.role }}</div>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'stats' %}
+  <section class="site-section">
+    <div class="site-container">
+      <div class="site-stats-grid">
+        {% for s in d['items'] %}
+        <div class="site-stat">
+          <div class="site-stat-value">{{ s.value }}</div>
+          <div class="site-stat-label">{{ s.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'faq' %}
+  <section class="site-section">
+    <div class="site-container" style="max-width:700px;">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      <div class="site-faq-list">
+        {% for f in d['items'] %}
+        <details class="site-faq-item">
+          <summary>{{ f.q }}</summary>
+          <p>{{ f.a }}</p>
+        </details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'image' %}
+  <section class="site-section">
+    <div class="site-container" style="text-align:center;">
+      {% if d.url %}<img src="{{ d.url }}" alt="{{ d.caption }}" class="site-image">{% endif %}
+      {% if d.caption %}<p class="site-image-caption">{{ d.caption }}</p>{% endif %}
+    </div>
+  </section>
+
+  {% elif row.type == 'spacer' %}
+  <div style="height:{{ d.height or 48 }}px;"></div>
+  {% endif %}
+
+  {% endfor %}
+  {% endif %}
+
+  <footer class="site-footer">
+    <span>Powered by Community</span>
+  </footer>
+</body>
+</html>

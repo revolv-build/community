@@ -1,0 +1,45 @@
+{% extends "community/base.html" %}
+{% block title %}Results: {{ poll.title }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div style="margin-bottom:8px;"><a href="/c/{{ community.slug }}/insights" style="font-size:12px;color:#7070e0;">← Back to Insight Loop</a></div>
+  <h1>{{ poll.title }}</h1>
+  <div class="sub">{{ response_count }} response{{ 's' if response_count != 1 else '' }}</div>
+
+  {% for q in questions %}
+  <div class="card mb-16">
+    <h3 style="margin-bottom:12px;">{{ loop.index }}. {{ q.question }}</h3>
+
+    {% set r = results[q.id] %}
+    {% if q.question_type in ('choice', 'rating') %}
+    <!-- Bar chart for choice/rating -->
+    {% for resp in r.responses %}
+    <div class="il-result-bar">
+      <div class="il-result-bar-label">
+        <span>{{ resp.answer }}</span>
+        <span style="color:#555;">{{ resp.cnt }} ({{ (resp.cnt / r.total * 100) | int }}%)</span>
+      </div>
+      <div class="il-result-bar-track">
+        <div class="il-result-bar-fill" style="width:{{ (resp.cnt / r.total * 100) | int }}%;"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <!-- Text responses -->
+    {% if is_admin %}
+    <div class="il-text-responses">
+      {% for resp in r.responses %}
+      <div class="il-text-response">
+        <div class="il-text-answer">{{ resp.answer }}</div>
+        <div style="font-size:11px;color:#444;">{{ resp.cnt }}x</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="font-size:13px;color:#555;">{{ r.total }} text response{{ 's' if r.total != 1 else '' }} (visible to admins)</div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

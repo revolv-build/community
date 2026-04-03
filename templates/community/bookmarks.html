@@ -1,0 +1,42 @@
+{% extends "community/base.html" %}
+{% block title %}Bookmarks - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page">
+  <h1>Your Bookmarks</h1>
+  <div class="sub">Posts you've saved in {{ community.name }}</div>
+
+  {% if posts %}
+    {% for post in posts %}
+    <div class="qa-card">
+      <div class="qa-votes">
+        <span class="qa-vote-score">{{ post.vote_score }}</span>
+      </div>
+      <div class="qa-content">
+        <div class="qa-title"><a href="/c/{{ community.slug }}/posts/{{ post.id }}">{{ post.title }}</a></div>
+        <div class="qa-footer">
+          <div class="qa-author">
+            <span class="qa-avatar">{{ post.author_name[0] | upper }}</span>
+            <span class="qa-author-name">{{ post.author_name }}</span>
+          </div>
+          <div class="qa-actions">
+            <span class="qa-date">{{ post.created[:10] }}</span>
+            <a href="/c/{{ community.slug }}/posts/{{ post.id }}" class="qa-action-btn">
+              <span class="qa-action-icon">💬</span> {{ post.comment_count }}
+            </a>
+            <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/bookmark" class="qa-action-form">
+              <button class="qa-action-btn qa-action-active" title="Remove bookmark">
+                <span class="qa-action-icon">★</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="qa-empty">
+      No bookmarks yet. Star posts from the feed to save them here.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

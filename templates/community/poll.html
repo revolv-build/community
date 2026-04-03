@@ -1,0 +1,49 @@
+{% extends "community/base.html" %}
+{% block title %}{{ poll.title }} - Insight Loop{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div style="margin-bottom:8px;"><a href="/c/{{ community.slug }}/insights" style="font-size:12px;color:#7070e0;">← Back to Insight Loop</a></div>
+  <h1>{{ poll.title }}</h1>
+  {% if poll.description %}<div class="sub">{{ poll.description }}</div>{% endif %}
+  <div class="il-points-badge mb-24" style="display:inline-block;">+{{ poll.points_reward }} points for completing</div>
+
+  {% if already_answered %}
+  <div class="card">
+    <div class="empty">You've already answered this poll. <a href="/c/{{ community.slug }}/insights/poll/{{ poll.id }}/results" style="color:#7070e0;">View results</a></div>
+  </div>
+  {% else %}
+  <form method="POST" action="/c/{{ community.slug }}/insights/poll/{{ poll.id }}/submit">
+    {% for q in questions %}
+    <div class="il-question-card">
+      <div class="il-q-number">{{ loop.index }}</div>
+      <div class="il-q-content">
+        <div class="il-q-text">{{ q.question }}</div>
+        {% if q.question_type == 'choice' and q.options %}
+        <div class="il-q-options">
+          {% for opt in q.options.split('|') %}
+          <label class="il-q-option">
+            <input type="radio" name="q_{{ q.id }}" value="{{ opt.strip() }}" required>
+            <span>{{ opt.strip() }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% elif q.question_type == 'rating' %}
+        <div class="il-q-rating">
+          {% for i in range(1, 11) %}
+          <label class="il-q-rating-btn">
+            <input type="radio" name="q_{{ q.id }}" value="{{ i }}" required>
+            <span>{{ i }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <textarea name="q_{{ q.id }}" placeholder="Your answer..." required style="min-height:80px;"></textarea>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;">Submit Answers & Earn {{ poll.points_reward }} Points</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

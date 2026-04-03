@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ user.name }} - Community{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div class="profile-header">
+    <div class="profile-avatar">{{ user.name[0] | upper }}</div>
+    <div class="profile-info">
+      <h1>{{ user.name }}</h1>
+      <span class="badge badge-{{ user.role }}">{{ user.role }}</span>
+      {% if user.bio %}
+      <div class="profile-bio">{{ user.bio }}</div>
+      {% endif %}
+      <div class="profile-details">
+        {% if user.location %}<span>{{ user.location }}</span>{% endif %}
+        {% if user.website %}<a href="{{ user.website }}" target="_blank" rel="noopener">{{ user.website | replace('https://', '') | replace('http://', '') }}</a>{% endif %}
+        <span>Joined {{ user.created[:10] if user.created else '—' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex-between mb-16">
+    <h2 style="margin-bottom:0;">Posts by {{ user.name }}</h2>
+  </div>
+
+  {% if posts %}
+    {% for post in posts %}
+    <div class="post-card">
+      <div class="post-title"><a href="/posts/{{ post.id }}">{{ post.title }}</a></div>
+      <div class="post-meta">
+        <span>{{ post.created[:10] }}</span>
+        <span>{{ post.comment_count }} comment{{ 's' if post.comment_count != 1 else '' }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="card empty">No posts yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

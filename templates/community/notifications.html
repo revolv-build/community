@@ -1,0 +1,31 @@
+{% extends "community/base.html" %}
+{% block title %}Notifications - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:640px;">
+  <h1>Notifications</h1>
+  <div class="sub">Updates from posts you follow in {{ community.name }}</div>
+
+  {% if notifications %}
+    {% for n in notifications %}
+    <div class="notif-item {{ '' if n.is_read else 'notif-unread' }}">
+      <div class="notif-icon">
+        {% if n.type == 'comment' %}&#9741;{% else %}&#9679;{% endif %}
+      </div>
+      <div class="notif-content">
+        <div class="notif-text">
+          {{ n.message }}
+        </div>
+        {% if n.post_id %}
+        <a href="/c/{{ community.slug }}/posts/{{ n.post_id }}" class="notif-link">View post</a>
+        {% endif %}
+        <div class="notif-time">{{ n.created[:16] | replace('T', ' at ') }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="qa-empty">
+      No notifications yet. Follow posts to get notified when new comments appear.
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

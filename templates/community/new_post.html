@@ -1,0 +1,34 @@
+{% extends "community/base.html" %}
+{% block title %}{{ 'Edit Post' if post else 'New Post' }} - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <h1>{{ 'Edit Post' if post else 'New Post' }}</h1>
+  <div class="sub">Share something with {{ community.name }}</div>
+
+  <div class="card">
+    <form method="POST">
+      <div class="field">
+        <div class="label">Title</div>
+        <input name="title" value="{{ post.title if post else '' }}" placeholder="What's on your mind?" required autofocus />
+      </div>
+      <div class="field">
+        <div class="label">Category</div>
+        <input name="category" value="{{ post.category if post else '' }}" placeholder="e.g. Demand Gen, AI, LinkedIn Ads" list="cat-list" />
+        {% if existing_categories is defined and existing_categories %}
+        <datalist id="cat-list">
+          {% for c in existing_categories %}<option value="{{ c }}">{% endfor %}
+        </datalist>
+        {% endif %}
+      </div>
+      <div class="field">
+        <div class="label">Body</div>
+        <textarea name="body" style="min-height:200px;" placeholder="Write your post...">{{ post.body if post else '' }}</textarea>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-primary">{{ 'Update' if post else 'Publish' }}</button>
+        <a href="/c/{{ community.slug }}/{{ 'posts/' ~ post.id if post else '' }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

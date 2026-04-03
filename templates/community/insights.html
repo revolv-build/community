@@ -1,0 +1,112 @@
+{% extends "community/base.html" %}
+{% block title %}Insight Loop - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1060px;">
+  <div class="flex-between mb-16">
+    <div>
+      <h1>Insight Loop</h1>
+      <div class="sub" style="margin-bottom:0;">Answer polls, earn points, claim rewards</div>
+    </div>
+    {% if membership.role in ('owner', 'admin') %}
+    <a href="/c/{{ community.slug }}/insights/create" class="btn btn-primary">Create Poll</a>
+    {% endif %}
+  </div>
+
+  <!-- Points Banner -->
+  <div class="il-points-banner mb-24">
+    <div class="il-points-value">{{ my_points }}</div>
+    <div class="il-points-label">Your Points</div>
+  </div>
+
+  <div class="qa-layout">
+    <div class="qa-feed-main">
+      <!-- Active Polls -->
+      <h2 class="mb-16">Active Polls</h2>
+      {% if polls %}
+        {% for p in polls %}
+        <div class="il-poll-card">
+          <div class="il-poll-info">
+            <div class="il-poll-title">{{ p.title }}</div>
+            {% if p.description %}<div class="il-poll-desc">{{ p.description }}</div>{% endif %}
+            <div class="il-poll-meta">
+              {{ p.question_count }} question{{ 's' if p.question_count != 1 else '' }} &middot;
+              {{ p.response_count }} response{{ 's' if p.response_count != 1 else '' }} &middot;
+              <span class="il-points-badge">+{{ p.points_reward }} pts</span>
+            </div>
+          </div>
+          <div class="il-poll-actions">
+            {% if p.id in answered_polls %}
+            <a href="/c/{{ community.slug }}/insights/poll/{{ p.id }}/results" class="btn btn-ghost btn-sm">View Results</a>
+            <span class="il-done-badge">Completed</span>
+            {% else %}
+            <a href="/c/{{ community.slug }}/insights/poll/{{ p.id }}" class="btn btn-primary btn-sm">Answer</a>
+            {% endif %}
+            {% if membership.role in ('owner', 'admin') %}
+            <a href="/c/{{ community.slug }}/insights/poll/{{ p.id }}/results" class="btn btn-ghost btn-sm">Results</a>
+            <form method="POST" action="/c/{{ community.slug }}/insights/poll/{{ p.id }}/close" style="display:inline;">
+              <button class="btn btn-danger btn-sm">Close</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="qa-empty">No active polls right now. Check back soon!</div>
+      {% endif %}
+
+      <!-- Rewards Store -->
+      {% if rewards %}
+      <h2 class="mt-24 mb-16">Rewards</h2>
+      <div class="il-rewards-grid">
+        {% for r in rewards %}
+        <div class="il-reward-card">
+          <div class="il-reward-title">{{ r.title }}</div>
+          {% if r.description %}<div class="il-reward-desc">{{ r.description }}</div>{% endif %}
+          <div class="il-reward-footer">
+            <span class="il-reward-cost">{{ r.cost }} pts</span>
+            {% if r.quantity != -1 %}<span class="il-reward-qty">{{ r.quantity }} left</span>{% endif %}
+            <form method="POST" action="/c/{{ community.slug }}/insights/reward/{{ r.id }}/claim">
+              <button class="btn btn-primary btn-sm" {{ 'disabled style=opacity:0.4;cursor:not-allowed;' if my_points < r.cost else '' }}>
+                {{ 'Claim' if my_points >= r.cost else 'Need ' ~ (r.cost - my_points) ~ ' more' }}
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Admin: Add Reward -->
+      {% if membership.role in ('owner', 'admin') %}
+      <div class="card mt-24">
+        <h2>Add Reward</h2>
+        <form method="POST" action="/c/{{ community.slug }}/insights/rewards/create" style="display:grid;grid-template-columns:2fr 2fr 1fr 1fr auto;gap:10px;align-items:end;">
+          <div><div class="label">Title</div><input name="title" placeholder="e.g. Free Coffee, 1-on-1 Call" required /></div>
+          <div><div class="label">Description</div><input name="description" placeholder="Optional details" /></div>
+          <div><div class="label">Cost (pts)</div><input name="cost" type="number" value="50" min="1" /></div>
+          <div><div class="label">Quantity</div><input name="quantity" type="number" value="-1" title="-1 = unlimited" /></div>
+          <div style="padding-top:18px;"><button class="btn btn-primary">Add</button></div>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Sidebar: Leaderboard -->
+    <aside class="qa-sidebar">
+      <div class="qa-sidebar-card">
+        <div class="qa-sidebar-title">Leaderboard</div>
+        {% for u in leaderboard %}
+        <div class="il-lb-row">
+          <span class="il-lb-rank">{{ loop.index }}</span>
+          <span class="il-lb-name">{{ u.name }}</span>
+          <span class="il-lb-pts">{{ u.total_points }} pts</span>
+        </div>
+        {% endfor %}
+        {% if not leaderboard %}
+        <div style="font-size:12px;color:#444;padding:8px 0;">No points earned yet.</div>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Community{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  {% if current_user and current_user.is_admin and not session.get('impersonator_id') %}
+  <div class="admin-bar">
+    <span class="admin-bar-label">ADMIN</span>
+    <a href="/admin">Dashboard</a>
+    <a href="/admin?tab=communities">Communities</a>
+    <a href="/admin?tab=users">Users</a>
+    <a href="/admin?tab=activity">Activity</a>
+    <a href="/screenshots">Screenshots</a>
+  </div>
+  {% endif %}
+
+  {% if current_user %}
+  <nav>
+    <a href="/dashboard" class="logo">&#9672; Community</a>
+    <div class="nav-links">
+      <a href="/dashboard" {% if request.path == '/dashboard' %}class="active"{% endif %}>Dashboard</a>
+      <a href="/account" {% if request.path.startswith('/account') %}class="active"{% endif %}>Account</a>
+      <a href="/logout">Log out</a>
+    </div>
+  </nav>
+  {% endif %}
+
+  {% if session.get('impersonator_id') %}
+  <div class="impersonate-banner">
+    Viewing as <strong>{{ current_user.name }}</strong> ({{ current_user.email }})
+    <form method="POST" action="/admin/stop-impersonating" style="display:inline;">
+      <button class="btn btn-primary btn-sm" style="margin-left:12px;">Switch Back to Admin</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="page" style="padding-bottom:0;">
+        {% for category, message in messages %}
+          <div class="msg msg-{{ 'ok' if category == 'success' else 'err' }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</body>
+</html>

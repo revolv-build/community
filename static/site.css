@@ -1,0 +1,67 @@
+/* ── Public Site Styles ────────────────────────────────────────── */
+.site-body { background: #0a0a0a; }
+
+.site-nav { display: flex; justify-content: space-between; align-items: center; padding: 0 40px; height: 56px; border-bottom: 1px solid #1a1a1a; background: #0a0a0a; position: sticky; top: 0; z-index: 100; }
+.site-nav-logo { font-size: 16px; font-weight: 600; color: #fff; }
+.site-nav-links { display: flex; align-items: center; gap: 20px; }
+.site-nav-links a { font-size: 13px; color: #888; transition: color .15s; }
+.site-nav-links a:hover { color: #fff; }
+
+/* Hero */
+.site-hero { padding: 100px 40px 80px; text-align: center; }
+.site-hero-inner { max-width: 700px; margin: 0 auto; }
+.site-hero-title { font-size: 48px; font-weight: 800; color: #fff; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 16px; }
+.site-hero-sub { font-size: 18px; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 32px; }
+.site-hero-btn { padding: 14px 36px !important; font-size: 15px !important; border-radius: 4px !important; }
+
+/* Sections */
+.site-section { padding: 64px 40px; }
+.site-container { max-width: 960px; margin: 0 auto; }
+.site-heading { font-size: 28px; font-weight: 700; color: #fff; text-align: center; margin-bottom: 32px; letter-spacing: -.02em; }
+.site-text { font-size: 16px; color: #aaa; line-height: 1.7; text-align: center; max-width: 640px; margin: 0 auto; white-space: pre-wrap; }
+
+/* Features */
+.site-features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+.site-feature { background: #111; border: 1px solid #1e1e1e; border-radius: 4px; padding: 28px; text-align: center; transition: border-color .15s; }
+.site-feature:hover { border-color: #333; }
+.site-feature-icon { font-size: 32px; margin-bottom: 12px; }
+.site-feature h3 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+.site-feature p { font-size: 14px; color: #888; line-height: 1.5; }
+
+/* CTA */
+.site-cta { padding: 64px 40px; }
+.site-cta-sub { font-size: 16px; color: rgba(255,255,255,0.5); text-align: center; margin-bottom: 24px; }
+
+/* Testimonial */
+.site-testimonial { text-align: center; padding: 32px; background: #111; border: 1px solid #1e1e1e; border-radius: 4px; }
+.site-testimonial-quote { font-size: 18px; color: #ccc; font-style: italic; line-height: 1.6; margin-bottom: 16px; }
+.site-testimonial-author { font-size: 14px; font-weight: 600; color: #fff; }
+.site-testimonial-role { font-size: 13px; color: #666; margin-top: 2px; }
+
+/* Stats */
+.site-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 20px; text-align: center; }
+.site-stat { padding: 24px; background: #111; border: 1px solid #1e1e1e; border-radius: 4px; }
+.site-stat-value { font-size: 36px; font-weight: 800; color: #fff; letter-spacing: -.02em; }
+.site-stat-label { font-size: 12px; font-weight: 500; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+/* FAQ */
+.site-faq-list { }
+.site-faq-item { background: #111; border: 1px solid #1e1e1e; border-radius: 4px; margin-bottom: 8px; overflow: hidden; }
+.site-faq-item summary { padding: 16px 20px; font-size: 15px; font-weight: 500; color: #eee; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.site-faq-item summary::-webkit-details-marker { display: none; }
+.site-faq-item summary::after { content: '+'; font-size: 18px; color: #555; }
+.site-faq-item[open] summary::after { content: '−'; }
+.site-faq-item[open] summary { border-bottom: 1px solid #1e1e1e; }
+.site-faq-item p { padding: 16px 20px; font-size: 14px; color: #999; line-height: 1.6; }
+
+/* Image */
+.site-image { max-width: 100%; border-radius: 4px; }
+.site-image-caption { font-size: 13px; color: #666; margin-top: 8px; }
+
+/* Empty state */
+.site-empty { text-align: center; padding: 120px 40px; }
+.site-empty h1 { font-size: 36px; color: #fff; margin-bottom: 12px; }
+.site-empty p { font-size: 16px; color: #888; margin-bottom: 32px; }
+
+/* Footer */
+.site-footer { text-align: center; padding: 32px; border-top: 1px solid #1a1a1a; font-size: 12px; color: #444; }

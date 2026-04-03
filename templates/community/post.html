@@ -1,0 +1,147 @@
+{% extends "community/base.html" %}
+{% block title %}{{ post.title }} - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <!-- Post -->
+  <div class="qa-card qa-card-detail">
+    <div class="qa-votes">
+      <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/vote">
+        <input type="hidden" name="value" value="1" />
+        <button class="qa-vote-btn {{ 'qa-vote-up-active' if my_vote == 1 else '' }}" type="submit">&#9650;</button>
+      </form>
+      <span class="qa-vote-score {{ 'qa-score-positive' if post.vote_score > 0 else '' }}{{ 'qa-score-negative' if post.vote_score < 0 else '' }}">{{ post.vote_score }}</span>
+      <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/vote">
+        <input type="hidden" name="value" value="-1" />
+        <button class="qa-vote-btn {{ 'qa-vote-down-active' if my_vote == -1 else '' }}" type="submit">&#9660;</button>
+      </form>
+    </div>
+
+    <div class="qa-content">
+      <div class="qa-detail-header">
+        <div class="qa-author" style="margin-bottom:8px;">
+          <span class="qa-avatar">{{ post.author_name[0] | upper }}</span>
+          <a href="/c/{{ community.slug }}/members/{{ post.user_id }}" class="qa-author-name">{{ post.author_name }}</a>
+          {% if flair %}<span class="qa-flair">{{ flair }}</span>{% endif %}
+          <span class="qa-date">{{ post.created[:10] }}</span>
+          {% if post.updated and post.updated != post.created %}
+          <span class="qa-date">(edited)</span>
+          {% endif %}
+        </div>
+        {% if post.user_id == current_user.id or membership.role in ('owner', 'admin') %}
+        <div class="flex gap-8">
+          {% if post.user_id == current_user.id %}
+          <a href="/c/{{ community.slug }}/posts/{{ post.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
+          {% endif %}
+          <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/delete" onsubmit="return confirm('Delete this post?')">
+            <button class="btn btn-danger btn-sm">Delete</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if post.category %}
+      <a href="/c/{{ community.slug }}/?category={{ post.category }}" class="qa-cat-badge">{{ post.category }}</a>
+      {% endif %}
+
+      <h1 class="qa-detail-title">{{ post.title }}</h1>
+      {% if post.body %}
+      <div class="post-body">{{ post.body }}</div>
+      {% endif %}
+
+      <!-- Action Bar -->
+      <div class="qa-detail-actions">
+        <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/bookmark" class="qa-action-form">
+          <button class="qa-action-btn-lg {{ 'qa-action-active' if is_bookmarked else '' }}">
+            {{ '★' if is_bookmarked else '☆' }} {{ 'Bookmarked' if is_bookmarked else 'Bookmark' }}
+          </button>
+        </form>
+        <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/follow" class="qa-action-form">
+          <button class="qa-action-btn-lg {{ 'qa-action-active' if is_following else '' }}">
+            {{ '◆' if is_following else '◇' }} {{ 'Following' if is_following else 'Follow' }}{% if follow_count %} ({{ follow_count }}){% endif %}
+          </button>
+        </form>
+        <button class="qa-action-btn-lg" onclick="navigator.clipboard.writeText(window.location.href);this.innerHTML='✓ Copied!';setTimeout(()=>this.innerHTML='↗ Share',1500)">
+          ↗ Share
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comments -->
+  <div class="qa-comments-section">
+    <div class="qa-comments-header">
+      <h2 style="margin-bottom:0;">{{ comment_tree | length }} Comment{{ 's' if comment_tree | length != 1 else '' }}</h2>
+    </div>
+
+    <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/comment" class="qa-comment-form">
+      <div class="qa-comment-input-row">
+        <span class="qa-avatar qa-avatar-sm">{{ current_user.name[0] | upper }}</span>
+        <textarea name="body" placeholder="Add a comment..." required></textarea>
+      </div>
+      <div style="text-align:right;margin-top:8px;">
+        <button class="btn btn-primary btn-sm">Comment</button>
+      </div>
+    </form>
+
+    {% macro render_comment(c, depth) %}
+    <div class="cmt {{ 'cmt-depth-' ~ depth if depth > 0 else '' }} {{ 'cmt-awarded' if c.has_awards else '' }}">
+      <div class="cmt-left">
+        <span class="qa-avatar qa-avatar-sm">{{ c.author_name[0] | upper }}</span>
+        <div class="cv-mini">
+          <form method="POST" action="/c/{{ community.slug }}/comments/{{ c.id }}/vote"><input type="hidden" name="value" value="1"><button class="cv-btn {{ 'cv-up-active' if c.my_vote == 1 else '' }}">&#9650;</button></form>
+          <span class="cv-score {{ 'qa-score-positive' if c.vote_score > 0 else '' }}{{ 'qa-score-negative' if c.vote_score < 0 else '' }}">{{ c.vote_score }}</span>
+          <form method="POST" action="/c/{{ community.slug }}/comments/{{ c.id }}/vote"><input type="hidden" name="value" value="-1"><button class="cv-btn {{ 'cv-down-active' if c.my_vote == -1 else '' }}">&#9660;</button></form>
+        </div>
+      </div>
+      <div class="cmt-right">
+        <div class="cmt-header">
+          <a href="/c/{{ community.slug }}/members/{{ c.user_id }}" class="qa-author-name">{{ c.author_name }}</a>
+          <span class="qa-date">{{ c.created[:10] }}</span>
+          {% if c.can_delete %}
+          <form method="POST" action="/c/{{ community.slug }}/comments/{{ c.id }}/delete" style="display:inline;">
+            <button class="qa-delete-btn">delete</button>
+          </form>
+          {% endif %}
+        </div>
+        <div class="cmt-body">{{ c.body }}</div>
+        {% if c.awards %}
+        <div class="cmt-awards">
+          {% for a in c.awards %}
+          <form method="POST" action="/c/{{ community.slug }}/comments/{{ c.id }}/award" class="award-form">
+            <input type="hidden" name="emoji" value="{{ a.emoji }}">
+            <button class="award-pill {{ 'award-mine' if a.mine else '' }}">{{ a.symbol }} {{ a.count }}</button>
+          </form>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="cmt-actions">
+          {% if depth < 4 %}
+          <button class="cmt-action-btn" onclick="var f=this.closest('.cmt-right').querySelector('.cmt-reply-form');f.style.display=f.style.display==='none'?'block':'none';f.querySelector('textarea').focus()">Reply</button>
+          {% endif %}
+        </div>
+        {% if depth < 4 %}
+        <div class="cmt-reply-form" style="display:none;">
+          <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/comment">
+            <input type="hidden" name="parent_id" value="{{ c.id }}">
+            <textarea name="body" placeholder="Reply to {{ c.author_name }}..." required style="min-height:50px;font-size:12px;"></textarea>
+            <div style="text-align:right;margin-top:6px;"><button class="btn btn-primary btn-sm">Reply</button></div>
+          </form>
+        </div>
+        {% endif %}
+        {% if c.children %}
+        <div class="cmt-children">
+          {% for child in c.children %}
+            {{ render_comment(child, depth + 1) }}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endmacro %}
+
+    {% for c in comment_tree %}
+      {{ render_comment(c, 0) }}
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

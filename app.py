@@ -1,76 +1,335 @@
 """
-Flask Foundation
-────────────────
-A clean starting point for Flask apps with:
-  - User auth (login / logout / account settings)
-  - Role-based access (admin / user)
-  - Admin panel (add/delete users, manage roles)
-  - JSON-file persistence — no database needed for small apps
-  - Auto-creates a default admin account on first boot
+Community Platform
+──────────────────
+A multi-tenant community platform where anyone can create and manage
+their own community space. Each community has its own members, posts,
+and discussions — all under one roof.
 
-To add your app: build beneath the '── YOUR APP ──' section.
+Architecture:
+  - Platform level: landing, auth, dashboard, create community
+  - Community level: /c/<slug>/ — feed, posts, members, settings
+  - Roles: platform-wide (user account) + per-community (owner/admin/member)
 """
 
 import json
-import uuid
+import os
+import re
+import sqlite3
+import subprocess
+import sys
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import (
-    Flask, render_template_string, request,
-    redirect, url_for, session, jsonify
+    Flask, render_template, request,
+    redirect, url_for, session, flash, g, abort, send_from_directory
 )
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 # ── Config ────────────────────────────────────────────────────────
-APP_DIR   = Path(__file__).parent
-DATA_DIR  = APP_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
 
-USERS_FILE   = DATA_DIR / "users.json"
-SECRET_KEY   = "change-me-in-production"   # override with env var in prod
-DEFAULT_PORT = 5001                         # change per-app to avoid clashes
+load_dotenv()
+
+APP_DIR = Path(__file__).parent
+DB_PATH = APP_DIR / "data" / "community.db"
+
+UPLOAD_DIR = APP_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+ALLOWED_EXTENSIONS = {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt", "csv", "zip",
+                      "png", "jpg", "jpeg", "gif", "svg", "mp4", "mov", "webm"}
+MAX_UPLOAD_MB = 50
 
 app = Flask(__name__)
-app.secret_key = SECRET_KEY
+app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+DEFAULT_PORT = int(os.environ.get("PORT", 5001))
 
-# ── User persistence ───────────────────────────────────────────────
+(APP_DIR / "data").mkdir(exist_ok=True)
 
-def _load_users():
-    if USERS_FILE.exists():
-        return json.loads(USERS_FILE.read_text())
-    return []
+# ── Database ──────────────────────────────────────────────────────
 
-def _save_users(users):
-    USERS_FILE.write_text(json.dumps(users, indent=2))
+def get_db():
+    if "db" not in g:
+        g.db = sqlite3.connect(str(DB_PATH))
+        g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA journal_mode=WAL")
+        g.db.execute("PRAGMA foreign_keys=ON")
+    return g.db
 
-def _get_user_by_email(email):
-    for u in _load_users():
-        if u["email"].lower() == email.lower():
-            return u
+@app.teardown_appcontext
+def close_db(exc):
+    db = g.pop("db", None)
+    if db:
+        db.close()
+
+def init_db():
+    db = sqlite3.connect(str(DB_PATH))
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("PRAGMA foreign_keys=ON")
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            password_hash TEXT NOT NULL,
+            is_admin      INTEGER NOT NULL DEFAULT 0,
+            bio           TEXT DEFAULT '',
+            location      TEXT DEFAULT '',
+            website       TEXT DEFAULT '',
+            created       TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS communities (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            slug          TEXT NOT NULL UNIQUE,
+            description   TEXT DEFAULT '',
+            owner_id      INTEGER NOT NULL,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS memberships (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       INTEGER NOT NULL,
+            community_id  INTEGER NOT NULL,
+            role          TEXT NOT NULL DEFAULT 'member',
+            joined        TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
+            UNIQUE(user_id, community_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS posts (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            community_id  INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            title         TEXT NOT NULL,
+            body          TEXT DEFAULT '',
+            category      TEXT DEFAULT '',
+            created       TEXT NOT NULL,
+            updated       TEXT NOT NULL,
+            FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS comments (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id       INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            body          TEXT NOT NULL,
+            parent_id     INTEGER DEFAULT NULL,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS comment_votes (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            comment_id    INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            value         INTEGER NOT NULL DEFAULT 0,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(comment_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS comment_awards (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            comment_id    INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            emoji         TEXT NOT NULL,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(comment_id, user_id, emoji)
+        );
+
+        CREATE TABLE IF NOT EXISTS events (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            community_id  INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            title         TEXT NOT NULL,
+            description   TEXT DEFAULT '',
+            event_date    TEXT NOT NULL,
+            event_time    TEXT DEFAULT '',
+            end_time      TEXT DEFAULT '',
+            location      TEXT DEFAULT '',
+            location_type TEXT NOT NULL DEFAULT 'in-person',
+            link          TEXT DEFAULT '',
+            created       TEXT NOT NULL,
+            FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS rsvps (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id      INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'going',
+            created       TEXT NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(event_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS resources (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            community_id  INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            title         TEXT NOT NULL,
+            description   TEXT DEFAULT '',
+            resource_type TEXT NOT NULL DEFAULT 'file',
+            file_path     TEXT DEFAULT '',
+            file_name     TEXT DEFAULT '',
+            file_size     INTEGER DEFAULT 0,
+            url           TEXT DEFAULT '',
+            tags          TEXT DEFAULT '',
+            created       TEXT NOT NULL,
+            FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS votes (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id       INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            value         INTEGER NOT NULL DEFAULT 0,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(post_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS bookmarks (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id       INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(post_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS follows (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id       INTEGER NOT NULL,
+            user_id       INTEGER NOT NULL,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(post_id, user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS notifications (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       INTEGER NOT NULL,
+            community_id  INTEGER NOT NULL,
+            post_id       INTEGER,
+            type          TEXT NOT NULL,
+            message       TEXT NOT NULL,
+            is_read       INTEGER NOT NULL DEFAULT 0,
+            created       TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE SET NULL
+        );
+    """)
+
+    # Create default platform admin if no users exist
+    row = db.execute("SELECT COUNT(*) FROM users").fetchone()
+    if row[0] == 0:
+        db.execute(
+            "INSERT INTO users (name, email, password_hash, is_admin, created) VALUES (?, ?, ?, ?, ?)",
+            ("Platform Admin", "admin@example.com", generate_password_hash("changeme"), 1, datetime.utcnow().isoformat())
+        )
+        print("Default platform admin created — email: admin@example.com  password: changeme")
+
+    db.commit()
+    db.close()
+
+# ── Helpers ───────────────────────────────────────────────────────
+
+def get_user_by_id(uid):
+    return get_db().execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+
+def get_user_by_email(email):
+    return get_db().execute("SELECT * FROM users WHERE email = ? COLLATE NOCASE", (email,)).fetchone()
+
+def current_user():
+    uid = session.get("user_id")
+    if uid:
+        return get_user_by_id(uid)
     return None
 
-def _get_user_by_id(uid):
-    for u in _load_users():
-        if u["id"] == uid:
-            return u
+def get_community_by_slug(slug):
+    return get_db().execute("SELECT * FROM communities WHERE slug = ?", (slug,)).fetchone()
+
+def get_membership(user_id, community_id):
+    return get_db().execute(
+        "SELECT * FROM memberships WHERE user_id = ? AND community_id = ?",
+        (user_id, community_id)
+    ).fetchone()
+
+def get_user_communities(user_id):
+    return get_db().execute("""
+        SELECT c.*, m.role AS my_role
+        FROM communities c JOIN memberships m ON c.id = m.community_id
+        WHERE m.user_id = ?
+        ORDER BY c.name
+    """, (user_id,)).fetchall()
+
+def slugify(text):
+    slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
+    return slug[:60]
+
+def get_user_flair(user_id, community_id):
+    """Calculate user flair based on post activity within the community."""
+    db = get_db()
+    # Get total posts by all users in this community
+    all_users = db.execute("""
+        SELECT user_id, COUNT(*) AS cnt FROM posts
+        WHERE community_id = ? GROUP BY user_id ORDER BY cnt DESC
+    """, (community_id,)).fetchall()
+    if not all_users:
+        return None
+    total_users = len(all_users)
+    if total_users < 2:
+        return None
+    # Find this user's rank
+    for i, row in enumerate(all_users):
+        if row["user_id"] == user_id:
+            percentile = (i / total_users) * 100
+            post_count = row["cnt"]
+            if post_count == 0:
+                return None
+            if percentile <= 1:
+                return "Top 1% Contributor"
+            elif percentile <= 5:
+                return "Top 5% Contributor"
+            elif percentile <= 10:
+                return "Top 10% Contributor"
+            elif percentile <= 25:
+                return "Top 25% Contributor"
+            return None
     return None
 
-def _init_default_admin():
-    """Create a default admin account if no users exist yet."""
-    if not _load_users():
-        _save_users([{
-            "id": "1",
-            "name": "Admin",
-            "email": "admin@example.com",
-            "password_hash": generate_password_hash("changeme"),
-            "role": "admin",
-            "created": datetime.utcnow().isoformat(),
-        }])
-        print("Default admin created — email: admin@example.com  password: changeme")
+def get_unread_notification_count(user_id, community_id):
+    return get_db().execute(
+        "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND community_id = ? AND is_read = 0",
+        (user_id, community_id)
+    ).fetchone()[0]
 
-# ── Auth decorators ────────────────────────────────────────────────
+@app.context_processor
+def inject_globals():
+    return dict(current_user=current_user())
+
+# ── Auth decorators ───────────────────────────────────────────────
 
 def login_required(f):
     @wraps(f)
@@ -80,295 +339,1905 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-def admin_required(f):
+def platform_admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        user = _get_user_by_id(session.get("user_id"))
-        if not user or user.get("role") != "admin":
-            return redirect(url_for("login_page"))
+        user = current_user()
+        if not user or not user["is_admin"]:
+            flash("Platform admin access required.", "error")
+            return redirect("/dashboard")
         return f(*args, **kwargs)
     return decorated
 
-# ── Templates ──────────────────────────────────────────────────────
+def community_member_required(f):
+    """Ensures user is a member of the community in the URL slug."""
+    @wraps(f)
+    def decorated(slug, *args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login_page"))
+        community = get_community_by_slug(slug)
+        if not community:
+            abort(404)
+        membership = get_membership(session["user_id"], community["id"])
+        if not membership:
+            flash("You're not a member of this community.", "error")
+            return redirect("/dashboard")
+        g.community = community
+        g.membership = membership
+        return f(slug, *args, **kwargs)
+    return decorated
 
-BASE_CSS = """
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #0f0f0f; color: #ccc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
-a { color: inherit; text-decoration: none; }
-input, select, textarea { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px; color: #eee; font-size: 14px; padding: 10px 12px; width: 100%; outline: none; transition: border-color .15s; }
-input:focus, select:focus, textarea:focus { border-color: #555; }
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
-.btn:hover { opacity: .85; }
-.btn-primary { background: #fff; color: #000; }
-.btn-ghost { background: transparent; border: 1px solid #2a2a2a; color: #aaa; }
-.btn-danger { background: #3a1010; border: 1px solid #5a2020; color: #e05050; }
-.card { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 24px; }
-.label { font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #555; margin-bottom: 6px; }
-.field { margin-bottom: 16px; }
-.msg { padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 16px; }
-.msg-ok  { background: #0d2a1a; border: 1px solid #1a5a30; color: #5adb8a; }
-.msg-err { background: #2a0d0d; border: 1px solid #5a2020; color: #e05050; }
-nav { background: #0a0a0a; border-bottom: 1px solid #1a1a1a; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; height: 52px; }
-nav .logo { font-size: 15px; font-weight: 600; color: #fff; letter-spacing: -.02em; }
-nav .nav-links { display: flex; align-items: center; gap: 24px; }
-nav .nav-links a { font-size: 13px; color: #666; transition: color .15s; }
-nav .nav-links a:hover { color: #ccc; }
-.page { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
-.page-narrow { max-width: 440px; margin: 0 auto; padding: 80px 24px; }
-h1 { font-size: 22px; font-weight: 600; color: #fff; margin-bottom: 6px; }
-h2 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 16px; }
-.sub { font-size: 13px; color: #555; margin-bottom: 32px; }
-table { width: 100%; border-collapse: collapse; }
-th { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #444; text-align: left; padding: 10px 12px; border-bottom: 1px solid #1a1a1a; }
-td { padding: 12px; border-bottom: 1px solid #141414; font-size: 13px; color: #aaa; vertical-align: middle; }
-tr:last-child td { border-bottom: none; }
-.badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
-.badge-admin { background: #1a1a2a; color: #7070e0; border: 1px solid #2a2a4a; }
-.badge-user  { background: #1a1a1a; color: #555; border: 1px solid #2a2a2a; }
-"""
+def community_admin_required(f):
+    """Ensures user is owner or admin of the community."""
+    @wraps(f)
+    def decorated(slug, *args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login_page"))
+        community = get_community_by_slug(slug)
+        if not community:
+            abort(404)
+        membership = get_membership(session["user_id"], community["id"])
+        if not membership or membership["role"] not in ("owner", "admin"):
+            flash("Admin access required.", "error")
+            return redirect(f"/c/{slug}/")
+        g.community = community
+        g.membership = membership
+        return f(slug, *args, **kwargs)
+    return decorated
 
-def _nav(user):
-    is_admin = user and user.get("role") == "admin"
-    name = user["name"] if user else ""
-    return f"""
-    <nav>
-      <span class="logo">◈ MyApp</span>
-      <div class="nav-links">
-        <a href="/">Home</a>
-        {'<a href="/admin">Admin</a>' if is_admin else ''}
-        <a href="/account">{ name }</a>
-        <a href="/logout">Log out</a>
-      </div>
-    </nav>"""
+# ── Platform: Auth ────────────────────────────────────────────────
 
-# ── Auth routes ────────────────────────────────────────────────────
-
-LOGIN_HTML = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Login</title>
-<style>""" + BASE_CSS + """</style></head><body>
-<div class="page-narrow">
-  <div style="text-align:center;margin-bottom:32px;">
-    <div style="font-size:28px;margin-bottom:8px;">◈</div>
-    <h1>MyApp</h1>
-    <div class="sub">Sign in to continue</div>
-  </div>
-  {% if err %}<div class="msg msg-err">{{ err }}</div>{% endif %}
-  <div class="card">
-    <form method="POST">
-      <div class="field"><div class="label">Email</div><input name="email" type="email" required autofocus /></div>
-      <div class="field"><div class="label">Password</div><input name="password" type="password" required /></div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center;">Sign in</button>
-    </form>
-  </div>
-</div></body></html>"""
+@app.route("/")
+def landing():
+    if session.get("user_id"):
+        return redirect("/dashboard")
+    return render_template("landing.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     if session.get("user_id"):
-        return redirect("/")
+        return redirect("/dashboard")
     err = None
     if request.method == "POST":
-        user = _get_user_by_email(request.form.get("email", ""))
+        user = get_user_by_email(request.form.get("email", ""))
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
-            session["user_id"]   = user["id"]
+            session["user_id"] = user["id"]
             session["user_name"] = user["name"]
-            session["user_role"] = user.get("role", "user")
-            return redirect("/")
+            return redirect("/dashboard")
         err = "Invalid email or password."
-    return render_template_string(LOGIN_HTML, err=err)
+    return render_template("login.html", err=err)
+
+@app.route("/register", methods=["GET", "POST"])
+def register_page():
+    if session.get("user_id"):
+        return redirect("/dashboard")
+    err = None
+    name = ""
+    email = ""
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+
+        if not name or not email or not password:
+            err = "All fields are required."
+        elif len(password) < 8:
+            err = "Password must be at least 8 characters."
+        elif password != password_confirm:
+            err = "Passwords do not match."
+        elif get_user_by_email(email):
+            err = "An account with that email already exists."
+        else:
+            db = get_db()
+            db.execute(
+                "INSERT INTO users (name, email, password_hash, created) VALUES (?, ?, ?, ?)",
+                (name, email, generate_password_hash(password), datetime.utcnow().isoformat())
+            )
+            db.commit()
+            user = get_user_by_email(email)
+            session["user_id"] = user["id"]
+            session["user_name"] = user["name"]
+            flash("Welcome! Create your first community or join one.", "success")
+            return redirect("/dashboard")
+    return render_template("register.html", err=err, name=name, email=email)
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/login")
+    return redirect("/")
 
-# ── Account settings ───────────────────────────────────────────────
+# ── Platform: Dashboard ──────────────────────────────────────────
 
-ACCOUNT_HTML = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Account</title>
-<style>""" + BASE_CSS + """</style></head><body>
-{{ nav | safe }}
-<div class="page" style="max-width:560px;">
-  <h1>Account</h1><div class="sub">Update your details</div>
-  {% if msg %}<div class="msg msg-ok">{{ msg }}</div>{% endif %}
-  {% if err %}<div class="msg msg-err">{{ err }}</div>{% endif %}
-  <div class="card" style="margin-bottom:16px;">
-    <h2>Profile</h2>
-    <form method="POST" action="/account/profile">
-      <div class="field"><div class="label">Name</div><input name="name" value="{{ user.name }}" required /></div>
-      <div class="field"><div class="label">Email</div><input name="email" type="email" value="{{ user.email }}" required /></div>
-      <button class="btn btn-primary">Save</button>
-    </form>
-  </div>
-  <div class="card">
-    <h2>Change Password</h2>
-    <form method="POST" action="/account/password">
-      <div class="field"><div class="label">Current password</div><input name="current" type="password" required /></div>
-      <div class="field"><div class="label">New password</div><input name="new" type="password" required /></div>
-      <button class="btn btn-primary">Update password</button>
-    </form>
-  </div>
-</div></body></html>"""
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    communities = get_user_communities(session["user_id"])
+    return render_template("dashboard.html", communities=communities)
+
+# ── Platform: Create Community ───────────────────────────────────
+
+@app.route("/communities/new", methods=["GET", "POST"])
+@login_required
+def create_community():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        slug = slugify(request.form.get("slug", "") or name)
+        description = request.form.get("description", "").strip()
+
+        if not name or not slug:
+            flash("Community name is required.", "error")
+            return redirect("/communities/new")
+
+        if get_community_by_slug(slug):
+            flash("That URL is already taken. Try a different one.", "error")
+            return redirect("/communities/new")
+
+        db = get_db()
+        now = datetime.utcnow().isoformat()
+        cursor = db.execute(
+            "INSERT INTO communities (name, slug, description, owner_id, created) VALUES (?, ?, ?, ?, ?)",
+            (name, slug, description, session["user_id"], now)
+        )
+        community_id = cursor.lastrowid
+        db.execute(
+            "INSERT INTO memberships (user_id, community_id, role, joined) VALUES (?, ?, ?, ?)",
+            (session["user_id"], community_id, "owner", now)
+        )
+        db.commit()
+        flash(f"'{name}' is live!", "success")
+        return redirect(f"/c/{slug}/")
+
+    return render_template("create_community.html")
+
+# ── Platform: Join Community ─────────────────────────────────────
+
+@app.route("/join/<slug>", methods=["GET", "POST"])
+@login_required
+def join_community(slug):
+    community = get_community_by_slug(slug)
+    if not community:
+        abort(404)
+    existing = get_membership(session["user_id"], community["id"])
+    if existing:
+        return redirect(f"/c/{slug}/")
+    if request.method == "POST":
+        db = get_db()
+        db.execute(
+            "INSERT INTO memberships (user_id, community_id, role, joined) VALUES (?, ?, ?, ?)",
+            (session["user_id"], community["id"], "member", datetime.utcnow().isoformat())
+        )
+        db.commit()
+        flash(f"Welcome to {community['name']}!", "success")
+        return redirect(f"/c/{slug}/")
+    return render_template("join_community.html", community=community)
+
+# ── Platform: Account ────────────────────────────────────────────
 
 @app.route("/account")
 @login_required
 def account_page():
-    user = _get_user_by_id(session["user_id"])
-    return render_template_string(ACCOUNT_HTML, user=user, nav=_nav(user),
-                                  msg=request.args.get("msg"), err=request.args.get("err"))
+    user = get_user_by_id(session["user_id"])
+    return render_template("account.html", user=user)
 
 @app.route("/account/profile", methods=["POST"])
 @login_required
 def account_profile():
-    users = _load_users()
-    name  = request.form.get("name", "").strip()
+    db = get_db()
+    name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip().lower()
-    for u in users:
-        if u["id"] == session["user_id"]:
-            existing = _get_user_by_email(email)
-            if existing and existing["id"] != session["user_id"]:
-                return redirect("/account?err=Email+already+in+use")
-            u["name"] = name
-            u["email"] = email
-            _save_users(users)
-            session["user_name"] = name
-            return redirect("/account?msg=Profile+updated")
-    return redirect("/account?err=User+not+found")
+    bio = request.form.get("bio", "").strip()
+    location = request.form.get("location", "").strip()
+    website = request.form.get("website", "").strip()
+
+    existing = get_user_by_email(email)
+    if existing and existing["id"] != session["user_id"]:
+        flash("Email already in use.", "error")
+        return redirect("/account")
+
+    db.execute(
+        "UPDATE users SET name=?, email=?, bio=?, location=?, website=? WHERE id=?",
+        (name, email, bio, location, website, session["user_id"])
+    )
+    db.commit()
+    session["user_name"] = name
+    flash("Profile updated.", "success")
+    return redirect("/account")
 
 @app.route("/account/password", methods=["POST"])
 @login_required
 def account_password():
-    users = _load_users()
-    for u in users:
-        if u["id"] == session["user_id"]:
-            if not check_password_hash(u["password_hash"], request.form.get("current", "")):
-                return redirect("/account?err=Current+password+incorrect")
-            new_pw = request.form.get("new", "")
-            if len(new_pw) < 8:
-                return redirect("/account?err=Password+must+be+at+least+8+characters")
-            u["password_hash"] = generate_password_hash(new_pw)
-            _save_users(users)
-            return redirect("/account?msg=Password+updated")
-    return redirect("/account?err=User+not+found")
+    db = get_db()
+    user = get_user_by_id(session["user_id"])
+    if not check_password_hash(user["password_hash"], request.form.get("current", "")):
+        flash("Current password incorrect.", "error")
+        return redirect("/account")
+    new_pw = request.form.get("new", "")
+    if len(new_pw) < 8:
+        flash("Password must be at least 8 characters.", "error")
+        return redirect("/account")
+    db.execute(
+        "UPDATE users SET password_hash=? WHERE id=?",
+        (generate_password_hash(new_pw), session["user_id"])
+    )
+    db.commit()
+    flash("Password updated.", "success")
+    return redirect("/account")
 
-# ── Admin panel ────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════
+#  COMMUNITY-SCOPED ROUTES — /c/<slug>/...
+# ══════════════════════════════════════════════════════════════════
 
-ADMIN_HTML = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Admin</title>
-<style>""" + BASE_CSS + """</style></head><body>
-{{ nav | safe }}
-<div class="page">
-  <h1>Admin Panel</h1><div class="sub">Manage users</div>
-  {% if msg %}<div class="msg msg-ok">{{ msg }}</div>{% endif %}
-  {% if err %}<div class="msg msg-err">{{ err }}</div>{% endif %}
+# ── Community: Feed ──────────────────────────────────────────────
 
-  <div class="card" style="margin-bottom:24px;">
-    <h2>Add User</h2>
-    <form method="POST" action="/admin/users/add" style="display:grid;grid-template-columns:1fr 1fr 1fr auto auto;gap:10px;align-items:end;">
-      <div><div class="label">Name</div><input name="name" placeholder="Full name" required /></div>
-      <div><div class="label">Email</div><input name="email" type="email" placeholder="email@example.com" required /></div>
-      <div><div class="label">Password</div><input name="password" type="password" placeholder="Min 8 chars" required /></div>
-      <div><div class="label">Role</div>
-        <select name="role">
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-        </select>
-      </div>
-      <div style="padding-top:18px;"><button class="btn btn-primary">Add</button></div>
-    </form>
-  </div>
+@app.route("/c/<slug>/")
+@community_member_required
+def community_feed(slug):
+    db = get_db()
+    community = g.community
+    sort = request.args.get("sort", "new")
+    category = request.args.get("category", "")
+    q = request.args.get("q", "").strip()
 
-  <div class="card">
-    <h2>Users ({{ users | length }})</h2>
-    <table>
-      <tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th></th></tr>
-      {% for u in users %}
-      <tr>
-        <td style="color:#eee;">{{ u.name }}</td>
-        <td>{{ u.email }}</td>
-        <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
-        <td>{{ u.get('created','—')[:10] }}</td>
-        <td style="text-align:right;">
-          {% if u.id != current_user.id %}
-          <form method="POST" action="/admin/users/delete/{{ u.id }}" style="display:inline;" onsubmit="return confirm('Delete {{ u.name }}?')">
-            <button class="btn btn-danger" style="padding:6px 12px;font-size:12px;">Delete</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-</div></body></html>"""
+    order = "p.created DESC"
+    if sort == "top":
+        order = "vote_score DESC, p.created DESC"
+    elif sort == "discussed":
+        order = "comment_count DESC, p.created DESC"
+
+    where = "p.community_id = ?"
+    params = [community["id"]]
+    if category:
+        where += " AND p.category = ?"
+        params.append(category)
+    if q:
+        where += " AND (p.title LIKE ? OR p.body LIKE ?)"
+        params += [f"%{q}%", f"%{q}%"]
+
+    posts = db.execute(f"""
+        SELECT p.*, u.name AS author_name,
+               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count,
+               (SELECT COALESCE(SUM(v.value), 0) FROM votes v WHERE v.post_id = p.id) AS vote_score
+        FROM posts p JOIN users u ON p.user_id = u.id
+        WHERE {where}
+        ORDER BY {order} LIMIT 50
+    """, params).fetchall()
+
+    # Get all categories for this community
+    categories_raw = db.execute("""
+        SELECT category, COUNT(*) AS cnt FROM posts
+        WHERE community_id = ? AND category != ''
+        GROUP BY category ORDER BY cnt DESC
+    """, (community["id"],)).fetchall()
+    categories = [(r["category"], r["cnt"]) for r in categories_raw]
+
+    # Get current user's votes, bookmarks, follows
+    post_ids = [p["id"] for p in posts]
+    my_votes = {}
+    my_bookmarks = set()
+    my_follows = set()
+    if post_ids:
+        ph = ",".join("?" * len(post_ids))
+        uid = session["user_id"]
+        rows = db.execute(
+            f"SELECT post_id, value FROM votes WHERE user_id = ? AND post_id IN ({ph})",
+            [uid] + post_ids
+        ).fetchall()
+        my_votes = {r["post_id"]: r["value"] for r in rows}
+        rows = db.execute(
+            f"SELECT post_id FROM bookmarks WHERE user_id = ? AND post_id IN ({ph})",
+            [uid] + post_ids
+        ).fetchall()
+        my_bookmarks = {r["post_id"] for r in rows}
+        rows = db.execute(
+            f"SELECT post_id FROM follows WHERE user_id = ? AND post_id IN ({ph})",
+            [uid] + post_ids
+        ).fetchall()
+        my_follows = {r["post_id"] for r in rows}
+
+    posts_enriched = []
+    for p in posts:
+        d = dict(p)
+        body = d.get("body") or ""
+        d["preview"] = body[:200] + ("..." if len(body) > 200 else "")
+        d["my_vote"] = my_votes.get(p["id"], 0)
+        d["is_bookmarked"] = p["id"] in my_bookmarks
+        d["is_following"] = p["id"] in my_follows
+        d["flair"] = get_user_flair(p["user_id"], community["id"])
+        d["author_initial"] = p["author_name"][0].upper() if p["author_name"] else "?"
+        posts_enriched.append(d)
+
+    member_count = db.execute(
+        "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (community["id"],)
+    ).fetchone()[0]
+    notif_count = get_unread_notification_count(session["user_id"], community["id"])
+    return render_template("community/feed.html", community=community,
+                           posts=posts_enriched, membership=g.membership,
+                           member_count=member_count, sort=sort, notif_count=notif_count,
+                           categories=categories, current_category=category, search_q=q)
+
+# ── Community: Posts ─────────────────────────────────────────────
+
+@app.route("/c/<slug>/posts/new", methods=["GET", "POST"])
+@community_member_required
+def community_new_post(slug):
+    community = g.community
+    db = get_db()
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        category = request.form.get("category", "").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(f"/c/{slug}/posts/new")
+        now = datetime.utcnow().isoformat()
+        cursor = db.execute(
+            "INSERT INTO posts (community_id, user_id, title, body, category, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (community["id"], session["user_id"], title, body, category, now, now)
+        )
+        db.commit()
+        return redirect(f"/c/{slug}/posts/{cursor.lastrowid}")
+    # Get existing categories for autocomplete
+    cats = db.execute(
+        "SELECT DISTINCT category FROM posts WHERE community_id = ? AND category != '' ORDER BY category",
+        (community["id"],)
+    ).fetchall()
+    existing_cats = [c["category"] for c in cats]
+    return render_template("community/new_post.html", community=community,
+                           membership=g.membership, post=None, existing_categories=existing_cats)
+
+@app.route("/c/<slug>/posts/<int:pid>")
+@community_member_required
+def community_view_post(slug, pid):
+    db = get_db()
+    community = g.community
+    post = db.execute("""
+        SELECT p.*, u.name AS author_name,
+               (SELECT COALESCE(SUM(v.value), 0) FROM votes v WHERE v.post_id = p.id) AS vote_score
+        FROM posts p JOIN users u ON p.user_id = u.id
+        WHERE p.id = ? AND p.community_id = ?
+    """, (pid, community["id"])).fetchone()
+    if not post:
+        flash("Post not found.", "error")
+        return redirect(f"/c/{slug}/")
+    my_vote = db.execute(
+        "SELECT value FROM votes WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone()
+    comments_raw = db.execute("""
+        SELECT c.*, u.name AS author_name,
+               (SELECT COALESCE(SUM(cv.value), 0) FROM comment_votes cv WHERE cv.comment_id = c.id) AS vote_score
+        FROM comments c JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ? ORDER BY c.created ASC
+    """, (pid,)).fetchall()
+
+    # Build enriched comment list with votes, awards, tree structure
+    comment_ids = [c["id"] for c in comments_raw]
+    my_cv = {}
+    awards_map = {}
+    my_awards = {}
+    is_admin = g.membership["role"] in ("owner", "admin")
+    emoji_map = {"fire": "\U0001f525", "love": "\u2764\ufe0f", "brain": "\U0001f9e0",
+                 "clap": "\U0001f44f", "star": "\u2b50", "hundred": "\U0001f4af"}
+    if comment_ids:
+        ph = ",".join("?" * len(comment_ids))
+        uid = session["user_id"]
+        for r in db.execute(f"SELECT comment_id, value FROM comment_votes WHERE user_id=? AND comment_id IN ({ph})", [uid] + comment_ids).fetchall():
+            my_cv[r["comment_id"]] = r["value"]
+        for r in db.execute(f"SELECT comment_id, emoji, COUNT(*) AS cnt FROM comment_awards WHERE comment_id IN ({ph}) GROUP BY comment_id, emoji", comment_ids).fetchall():
+            awards_map.setdefault(r["comment_id"], []).append({"emoji": r["emoji"], "symbol": emoji_map.get(r["emoji"], r["emoji"]), "count": r["cnt"]})
+        for r in db.execute(f"SELECT comment_id, emoji FROM comment_awards WHERE user_id=? AND comment_id IN ({ph})", [uid] + comment_ids).fetchall():
+            my_awards.setdefault(r["comment_id"], set()).add(r["emoji"])
+
+    comments_enriched = []
+    by_id = {}
+    for c in comments_raw:
+        cid = c["id"]
+        ca = awards_map.get(cid, [])
+        ma = my_awards.get(cid, set())
+        node = {
+            "id": cid, "user_id": c["user_id"], "body": c["body"],
+            "parent_id": c["parent_id"], "created": c["created"],
+            "author_name": c["author_name"], "vote_score": c["vote_score"],
+            "my_vote": my_cv.get(cid, 0),
+            "can_delete": c["user_id"] == session["user_id"] or is_admin,
+            "awards": [{"emoji": a["emoji"], "symbol": a["symbol"], "count": a["count"], "mine": a["emoji"] in ma} for a in ca],
+            "has_awards": len(ca) > 0,
+            "children": []
+        }
+        by_id[cid] = node
+        comments_enriched.append(node)
+
+    # Build tree
+    comment_tree = []
+    for node in comments_enriched:
+        pid_ref = node["parent_id"]
+        if pid_ref and pid_ref in by_id:
+            by_id[pid_ref]["children"].append(node)
+        else:
+            comment_tree.append(node)
+
+    flair = get_user_flair(post["user_id"], community["id"])
+    is_bookmarked = db.execute(
+        "SELECT 1 FROM bookmarks WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone() is not None
+    is_following = db.execute(
+        "SELECT 1 FROM follows WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone() is not None
+    follow_count = db.execute(
+        "SELECT COUNT(*) FROM follows WHERE post_id = ?", (pid,)
+    ).fetchone()[0]
+    return render_template("community/post.html", community=community,
+                           membership=g.membership, post=post, comment_tree=comment_tree,
+                           my_vote=my_vote["value"] if my_vote else 0, flair=flair,
+                           is_bookmarked=is_bookmarked, is_following=is_following,
+                           follow_count=follow_count)
+
+@app.route("/c/<slug>/posts/<int:pid>/json")
+@community_member_required
+def community_post_json(slug, pid):
+    db = get_db()
+    community = g.community
+    post = db.execute("""
+        SELECT p.*, u.name AS author_name,
+               (SELECT COALESCE(SUM(v.value), 0) FROM votes v WHERE v.post_id = p.id) AS vote_score
+        FROM posts p JOIN users u ON p.user_id = u.id
+        WHERE p.id = ? AND p.community_id = ?
+    """, (pid, community["id"])).fetchone()
+    if not post:
+        return {"error": "not found"}, 404
+    my_vote = db.execute(
+        "SELECT value FROM votes WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone()
+    comments_raw = db.execute("""
+        SELECT c.id, c.user_id, c.body, c.parent_id, c.created, u.name AS author_name,
+               (SELECT COALESCE(SUM(cv.value), 0) FROM comment_votes cv WHERE cv.comment_id = c.id) AS vote_score
+        FROM comments c JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ? ORDER BY c.created ASC
+    """, (pid,)).fetchall()
+
+    # Get current user's comment votes
+    comment_ids = [c["id"] for c in comments_raw]
+    my_comment_votes = {}
+    awards_map = {}
+    my_awards = {}
+    if comment_ids:
+        ph = ",".join("?" * len(comment_ids))
+        uid = session["user_id"]
+        for r in db.execute(f"SELECT comment_id, value FROM comment_votes WHERE user_id=? AND comment_id IN ({ph})", [uid] + comment_ids).fetchall():
+            my_comment_votes[r["comment_id"]] = r["value"]
+        for r in db.execute(f"SELECT comment_id, emoji, COUNT(*) AS cnt FROM comment_awards WHERE comment_id IN ({ph}) GROUP BY comment_id, emoji", comment_ids).fetchall():
+            awards_map.setdefault(r["comment_id"], []).append({"emoji": r["emoji"], "count": r["cnt"]})
+        for r in db.execute(f"SELECT comment_id, emoji FROM comment_awards WHERE user_id=? AND comment_id IN ({ph})", [uid] + comment_ids).fetchall():
+            my_awards.setdefault(r["comment_id"], set()).add(r["emoji"])
+
+    flair = get_user_flair(post["user_id"], community["id"])
+    is_bookmarked = db.execute(
+        "SELECT 1 FROM bookmarks WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone() is not None
+    is_following = db.execute(
+        "SELECT 1 FROM follows WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone() is not None
+    follow_count = db.execute(
+        "SELECT COUNT(*) FROM follows WHERE post_id = ?", (pid,)
+    ).fetchone()[0]
+    is_admin = g.membership["role"] in ("owner", "admin")
+
+    emoji_map = {"fire": "\U0001f525", "love": "\u2764\ufe0f", "brain": "\U0001f9e0", "clap": "\U0001f44f", "star": "\u2b50", "hundred": "\U0001f4af"}
+
+    comments_out = []
+    for c in comments_raw:
+        cid = c["id"]
+        ca = awards_map.get(cid, [])
+        ma = my_awards.get(cid, set())
+        comments_out.append({
+            "id": cid, "user_id": c["user_id"], "body": c["body"],
+            "parent_id": c["parent_id"], "created": c["created"],
+            "author_name": c["author_name"],
+            "author_initial": c["author_name"][0].upper(),
+            "vote_score": c["vote_score"],
+            "my_vote": my_comment_votes.get(cid, 0),
+            "can_delete": c["user_id"] == session["user_id"] or is_admin,
+            "awards": [{"emoji": a["emoji"], "symbol": emoji_map.get(a["emoji"], a["emoji"]), "count": a["count"], "mine": a["emoji"] in ma} for a in ca],
+            "has_awards": len(ca) > 0
+        })
+
+    return {
+        "id": post["id"], "title": post["title"], "body": post["body"],
+        "category": post["category"] or "", "created": post["created"],
+        "updated": post["updated"], "user_id": post["user_id"],
+        "author_name": post["author_name"],
+        "author_initial": post["author_name"][0].upper(),
+        "vote_score": post["vote_score"],
+        "my_vote": my_vote["value"] if my_vote else 0,
+        "flair": flair, "is_bookmarked": is_bookmarked,
+        "is_following": is_following, "follow_count": follow_count,
+        "is_owner": post["user_id"] == session["user_id"],
+        "is_admin": is_admin,
+        "current_user_id": session["user_id"],
+        "current_user_initial": current_user()["name"][0].upper(),
+        "award_emojis": [{"key": k, "symbol": v} for k, v in emoji_map.items()],
+        "comments": comments_out
+    }
+
+@app.route("/c/<slug>/posts/<int:pid>/edit", methods=["GET", "POST"])
+@community_member_required
+def community_edit_post(slug, pid):
+    db = get_db()
+    community = g.community
+    post = db.execute("SELECT * FROM posts WHERE id = ? AND community_id = ?",
+                      (pid, community["id"])).fetchone()
+    if not post or post["user_id"] != session["user_id"]:
+        flash("Not allowed.", "error")
+        return redirect(f"/c/{slug}/")
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(f"/c/{slug}/posts/{pid}/edit")
+        db.execute(
+            "UPDATE posts SET title=?, body=?, updated=? WHERE id=?",
+            (title, body, datetime.utcnow().isoformat(), pid)
+        )
+        db.commit()
+        flash("Post updated.", "success")
+        return redirect(f"/c/{slug}/posts/{pid}")
+    return render_template("community/new_post.html", community=community,
+                           membership=g.membership, post=post)
+
+@app.route("/c/<slug>/posts/<int:pid>/delete", methods=["POST"])
+@community_member_required
+def community_delete_post(slug, pid):
+    db = get_db()
+    community = g.community
+    post = db.execute("SELECT * FROM posts WHERE id = ? AND community_id = ?",
+                      (pid, community["id"])).fetchone()
+    is_admin = g.membership["role"] in ("owner", "admin")
+    if not post or (post["user_id"] != session["user_id"] and not is_admin):
+        flash("Not allowed.", "error")
+        return redirect(f"/c/{slug}/")
+    db.execute("DELETE FROM posts WHERE id = ?", (pid,))
+    db.commit()
+    flash("Post deleted.", "success")
+    return redirect(f"/c/{slug}/")
+
+@app.route("/c/<slug>/posts/<int:pid>/vote", methods=["POST"])
+@community_member_required
+def community_vote(slug, pid):
+    value = int(request.form.get("value", 0))
+    if value not in (1, -1):
+        return redirect(f"/c/{slug}/")
+    db = get_db()
+    existing = db.execute(
+        "SELECT id, value FROM votes WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone()
+    now = datetime.utcnow().isoformat()
+    if existing:
+        if existing["value"] == value:
+            # Toggle off — remove vote
+            db.execute("DELETE FROM votes WHERE id = ?", (existing["id"],))
+        else:
+            # Switch vote direction
+            db.execute("UPDATE votes SET value = ?, created = ? WHERE id = ?",
+                       (value, now, existing["id"]))
+    else:
+        db.execute("INSERT INTO votes (post_id, user_id, value, created) VALUES (?, ?, ?, ?)",
+                   (pid, session["user_id"], value, now))
+    db.commit()
+    # Return to wherever they came from
+    referrer = request.referrer or f"/c/{slug}/"
+    return redirect(referrer)
+
+@app.route("/c/<slug>/posts/<int:pid>/bookmark", methods=["POST"])
+@community_member_required
+def community_bookmark(slug, pid):
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM bookmarks WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone()
+    if existing:
+        db.execute("DELETE FROM bookmarks WHERE id = ?", (existing["id"],))
+    else:
+        db.execute("INSERT INTO bookmarks (post_id, user_id, created) VALUES (?, ?, ?)",
+                   (pid, session["user_id"], datetime.utcnow().isoformat()))
+    db.commit()
+    referrer = request.referrer or f"/c/{slug}/"
+    return redirect(referrer)
+
+@app.route("/c/<slug>/posts/<int:pid>/follow", methods=["POST"])
+@community_member_required
+def community_follow(slug, pid):
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM follows WHERE post_id = ? AND user_id = ?",
+        (pid, session["user_id"])
+    ).fetchone()
+    if existing:
+        db.execute("DELETE FROM follows WHERE id = ?", (existing["id"],))
+    else:
+        db.execute("INSERT INTO follows (post_id, user_id, created) VALUES (?, ?, ?)",
+                   (pid, session["user_id"], datetime.utcnow().isoformat()))
+    db.commit()
+    referrer = request.referrer or f"/c/{slug}/"
+    return redirect(referrer)
+
+@app.route("/c/<slug>/posts/<int:pid>/comment", methods=["POST"])
+@community_member_required
+def community_add_comment(slug, pid):
+    body = request.form.get("body", "").strip()
+    parent_id = request.form.get("parent_id", "")
+    parent_id = int(parent_id) if parent_id else None
+    if not body:
+        flash("Comment cannot be empty.", "error")
+        return redirect(f"/c/{slug}/posts/{pid}")
+    db = get_db()
+    community = g.community
+    now = datetime.utcnow().isoformat()
+    db.execute(
+        "INSERT INTO comments (post_id, user_id, body, parent_id, created) VALUES (?, ?, ?, ?, ?)",
+        (pid, session["user_id"], body, parent_id, now)
+    )
+    # Notify followers (except the commenter)
+    post = db.execute("SELECT title, user_id FROM posts WHERE id = ?", (pid,)).fetchone()
+    commenter = get_user_by_id(session["user_id"])
+    followers = db.execute(
+        "SELECT user_id FROM follows WHERE post_id = ? AND user_id != ?",
+        (pid, session["user_id"])
+    ).fetchall()
+    # Also notify the post author if they're not the commenter
+    notify_ids = set(f["user_id"] for f in followers)
+    if post and post["user_id"] != session["user_id"]:
+        notify_ids.add(post["user_id"])
+    for uid in notify_ids:
+        db.execute("""
+            INSERT INTO notifications (user_id, community_id, post_id, type, message, created)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (uid, community["id"], pid, "comment",
+              f'{commenter["name"]} commented on "{post["title"]}"', now))
+    db.commit()
+    return redirect(f"/c/{slug}/posts/{pid}")
+
+@app.route("/c/<slug>/comments/<int:cid>/delete", methods=["POST"])
+@community_member_required
+def community_delete_comment(slug, cid):
+    db = get_db()
+    comment = db.execute("SELECT * FROM comments WHERE id = ?", (cid,)).fetchone()
+    is_admin = g.membership["role"] in ("owner", "admin")
+    if not comment or (comment["user_id"] != session["user_id"] and not is_admin):
+        flash("Not allowed.", "error")
+        return redirect(f"/c/{slug}/")
+    post_id = comment["post_id"]
+    db.execute("DELETE FROM comments WHERE id = ?", (cid,))
+    db.commit()
+    return redirect(f"/c/{slug}/posts/{post_id}")
+
+@app.route("/c/<slug>/comments/<int:cid>/vote", methods=["POST"])
+@community_member_required
+def community_comment_vote(slug, cid):
+    value = int(request.form.get("value", 0))
+    if value not in (1, -1):
+        return redirect(f"/c/{slug}/")
+    db = get_db()
+    existing = db.execute(
+        "SELECT id, value FROM comment_votes WHERE comment_id = ? AND user_id = ?",
+        (cid, session["user_id"])
+    ).fetchone()
+    now = datetime.utcnow().isoformat()
+    if existing:
+        if existing["value"] == value:
+            db.execute("DELETE FROM comment_votes WHERE id = ?", (existing["id"],))
+        else:
+            db.execute("UPDATE comment_votes SET value=?, created=? WHERE id=?",
+                       (value, now, existing["id"]))
+    else:
+        db.execute("INSERT INTO comment_votes (comment_id, user_id, value, created) VALUES (?,?,?,?)",
+                   (cid, session["user_id"], value, now))
+    db.commit()
+    referrer = request.referrer or f"/c/{slug}/"
+    return redirect(referrer)
+
+AWARD_EMOJIS = {"fire": "🔥", "love": "❤️", "brain": "🧠", "clap": "👏", "star": "⭐", "hundred": "💯"}
+
+@app.route("/c/<slug>/comments/<int:cid>/award", methods=["POST"])
+@community_member_required
+def community_comment_award(slug, cid):
+    emoji = request.form.get("emoji", "")
+    if emoji not in AWARD_EMOJIS:
+        return redirect(f"/c/{slug}/")
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM comment_awards WHERE comment_id=? AND user_id=? AND emoji=?",
+        (cid, session["user_id"], emoji)
+    ).fetchone()
+    if existing:
+        db.execute("DELETE FROM comment_awards WHERE id=?", (existing["id"],))
+    else:
+        db.execute("INSERT INTO comment_awards (comment_id, user_id, emoji, created) VALUES (?,?,?,?)",
+                   (cid, session["user_id"], emoji, datetime.utcnow().isoformat()))
+    db.commit()
+    referrer = request.referrer or f"/c/{slug}/"
+    return redirect(referrer)
+
+# ── Community: Events ────────────────────────────────────────────
+
+@app.route("/c/<slug>/events")
+@community_member_required
+def community_events(slug):
+    db = get_db()
+    community = g.community
+    view = request.args.get("view", "upcoming")
+    now = datetime.utcnow().strftime("%Y-%m-%d")
+
+    if view == "past":
+        events = db.execute("""
+            SELECT e.*, u.name AS creator_name,
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count
+            FROM events e JOIN users u ON e.user_id = u.id
+            WHERE e.community_id = ? AND e.event_date < ?
+            ORDER BY e.event_date DESC
+        """, (community["id"], now)).fetchall()
+    elif view == "calendar":
+        month = request.args.get("month", datetime.utcnow().strftime("%Y-%m"))
+        events = db.execute("""
+            SELECT e.*, u.name AS creator_name,
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count
+            FROM events e JOIN users u ON e.user_id = u.id
+            WHERE e.community_id = ? AND e.event_date LIKE ?
+            ORDER BY e.event_date ASC, e.event_time ASC
+        """, (community["id"], f"{month}%")).fetchall()
+        return render_template("community/events_calendar.html", community=community,
+                               membership=g.membership, events=events, month=month)
+    else:
+        events = db.execute("""
+            SELECT e.*, u.name AS creator_name,
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count
+            FROM events e JOIN users u ON e.user_id = u.id
+            WHERE e.community_id = ? AND e.event_date >= ?
+            ORDER BY e.event_date ASC, e.event_time ASC
+        """, (community["id"], now)).fetchall()
+
+    # Check current user's RSVPs
+    event_ids = [e["id"] for e in events]
+    my_rsvps = {}
+    if event_ids:
+        placeholders = ",".join("?" * len(event_ids))
+        rows = db.execute(
+            f"SELECT event_id, status FROM rsvps WHERE user_id = ? AND event_id IN ({placeholders})",
+            [session["user_id"]] + event_ids
+        ).fetchall()
+        my_rsvps = {r["event_id"]: r["status"] for r in rows}
+
+    return render_template("community/events.html", community=community,
+                           membership=g.membership, events=events,
+                           my_rsvps=my_rsvps, view=view)
+
+@app.route("/c/<slug>/events/new", methods=["GET", "POST"])
+@community_member_required
+def community_new_event(slug):
+    community = g.community
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        event_date = request.form.get("event_date", "").strip()
+        event_time = request.form.get("event_time", "").strip()
+        end_time = request.form.get("end_time", "").strip()
+        location = request.form.get("location", "").strip()
+        location_type = request.form.get("location_type", "in-person")
+        link = request.form.get("link", "").strip()
+
+        if not title or not event_date:
+            flash("Title and date are required.", "error")
+            return redirect(f"/c/{slug}/events/new")
+
+        db = get_db()
+        now = datetime.utcnow().isoformat()
+        cursor = db.execute("""
+            INSERT INTO events (community_id, user_id, title, description, event_date,
+                                event_time, end_time, location, location_type, link, created)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (community["id"], session["user_id"], title, description, event_date,
+              event_time, end_time, location, location_type, link, now))
+        event_id = cursor.lastrowid
+        # Auto-RSVP the creator
+        db.execute("INSERT INTO rsvps (event_id, user_id, status, created) VALUES (?, ?, ?, ?)",
+                   (event_id, session["user_id"], "going", now))
+        db.commit()
+        flash("Event created!", "success")
+        return redirect(f"/c/{slug}/events/{event_id}")
+
+    return render_template("community/new_event.html", community=community,
+                           membership=g.membership, event=None)
+
+@app.route("/c/<slug>/events/<int:eid>")
+@community_member_required
+def community_view_event(slug, eid):
+    db = get_db()
+    community = g.community
+    event = db.execute("""
+        SELECT e.*, u.name AS creator_name
+        FROM events e JOIN users u ON e.user_id = u.id
+        WHERE e.id = ? AND e.community_id = ?
+    """, (eid, community["id"])).fetchone()
+    if not event:
+        flash("Event not found.", "error")
+        return redirect(f"/c/{slug}/events")
+
+    attendees = db.execute("""
+        SELECT u.id, u.name, r.status, r.created
+        FROM rsvps r JOIN users u ON r.user_id = u.id
+        WHERE r.event_id = ?
+        ORDER BY r.created ASC
+    """, (eid,)).fetchall()
+
+    my_rsvp = db.execute(
+        "SELECT status FROM rsvps WHERE event_id = ? AND user_id = ?",
+        (eid, session["user_id"])
+    ).fetchone()
+
+    return render_template("community/event_detail.html", community=community,
+                           membership=g.membership, event=event,
+                           attendees=attendees, my_rsvp=my_rsvp)
+
+@app.route("/c/<slug>/events/<int:eid>/edit", methods=["GET", "POST"])
+@community_member_required
+def community_edit_event(slug, eid):
+    db = get_db()
+    community = g.community
+    event = db.execute("SELECT * FROM events WHERE id = ? AND community_id = ?",
+                       (eid, community["id"])).fetchone()
+    is_admin = g.membership["role"] in ("owner", "admin")
+    if not event or (event["user_id"] != session["user_id"] and not is_admin):
+        flash("Not allowed.", "error")
+        return redirect(f"/c/{slug}/events")
+
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        event_date = request.form.get("event_date", "").strip()
+        event_time = request.form.get("event_time", "").strip()
+        end_time = request.form.get("end_time", "").strip()
+        location = request.form.get("location", "").strip()
+        location_type = request.form.get("location_type", "in-person")
+        link = request.form.get("link", "").strip()
+
+        if not title or not event_date:
+            flash("Title and date are required.", "error")
+            return redirect(f"/c/{slug}/events/{eid}/edit")
+
+        db.execute("""
+            UPDATE events SET title=?, description=?, event_date=?, event_time=?,
+                              end_time=?, location=?, location_type=?, link=?
+            WHERE id=?
+        """, (title, description, event_date, event_time, end_time,
+              location, location_type, link, eid))
+        db.commit()
+        flash("Event updated.", "success")
+        return redirect(f"/c/{slug}/events/{eid}")
+
+    return render_template("community/new_event.html", community=community,
+                           membership=g.membership, event=event)
+
+@app.route("/c/<slug>/events/<int:eid>/delete", methods=["POST"])
+@community_member_required
+def community_delete_event(slug, eid):
+    db = get_db()
+    community = g.community
+    event = db.execute("SELECT * FROM events WHERE id = ? AND community_id = ?",
+                       (eid, community["id"])).fetchone()
+    is_admin = g.membership["role"] in ("owner", "admin")
+    if not event or (event["user_id"] != session["user_id"] and not is_admin):
+        flash("Not allowed.", "error")
+        return redirect(f"/c/{slug}/events")
+    db.execute("DELETE FROM events WHERE id = ?", (eid,))
+    db.commit()
+    flash("Event deleted.", "success")
+    return redirect(f"/c/{slug}/events")
+
+@app.route("/c/<slug>/events/<int:eid>/rsvp", methods=["POST"])
+@community_member_required
+def community_rsvp(slug, eid):
+    status = request.form.get("status", "going")
+    if status not in ("going", "maybe", "not-going"):
+        status = "going"
+    db = get_db()
+    existing = db.execute(
+        "SELECT id FROM rsvps WHERE event_id = ? AND user_id = ?",
+        (eid, session["user_id"])
+    ).fetchone()
+    now = datetime.utcnow().isoformat()
+    if status == "not-going" and existing:
+        db.execute("DELETE FROM rsvps WHERE event_id = ? AND user_id = ?",
+                   (eid, session["user_id"]))
+    elif existing:
+        db.execute("UPDATE rsvps SET status = ? WHERE event_id = ? AND user_id = ?",
+                   (status, eid, session["user_id"]))
+    else:
+        db.execute("INSERT INTO rsvps (event_id, user_id, status, created) VALUES (?, ?, ?, ?)",
+                   (eid, session["user_id"], status, now))
+    db.commit()
+    return redirect(f"/c/{slug}/events/{eid}")
+
+# ── Community: Resources ─────────────────────────────────────────
+
+def _allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def _detect_video_embed(url):
+    """Extract embed URL from YouTube, Vimeo, or Loom links."""
+    if not url:
+        return None
+    url = url.strip()
+    # YouTube
+    if "youtube.com/watch" in url:
+        vid = url.split("v=")[1].split("&")[0] if "v=" in url else None
+        return f"https://www.youtube.com/embed/{vid}" if vid else None
+    if "youtu.be/" in url:
+        vid = url.split("youtu.be/")[1].split("?")[0]
+        return f"https://www.youtube.com/embed/{vid}"
+    # Vimeo
+    if "vimeo.com/" in url:
+        parts = url.rstrip("/").split("/")
+        vid = parts[-1] if parts[-1].isdigit() else None
+        return f"https://player.vimeo.com/video/{vid}" if vid else None
+    # Loom
+    if "loom.com/share/" in url:
+        vid = url.split("loom.com/share/")[1].split("?")[0]
+        return f"https://www.loom.com/embed/{vid}"
+    return None
+
+def _human_file_size(size_bytes):
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.0f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+@app.route("/c/<slug>/resources")
+@community_member_required
+def community_resources(slug):
+    db = get_db()
+    community = g.community
+    q = request.args.get("q", "").strip()
+    rtype = request.args.get("type", "")
+    tag = request.args.get("tag", "").strip()
+
+    sql = """
+        SELECT r.*, u.name AS author_name
+        FROM resources r JOIN users u ON r.user_id = u.id
+        WHERE r.community_id = ?
+    """
+    params = [community["id"]]
+
+    if q:
+        sql += " AND (r.title LIKE ? OR r.description LIKE ? OR r.tags LIKE ?)"
+        params += [f"%{q}%", f"%{q}%", f"%{q}%"]
+    if rtype:
+        sql += " AND r.resource_type = ?"
+        params.append(rtype)
+    if tag:
+        sql += " AND (r.tags LIKE ? OR r.tags LIKE ? OR r.tags LIKE ? OR r.tags = ?)"
+        params += [f"{tag},%", f"%, {tag},%", f"%, {tag}", tag]
+
+    sql += " ORDER BY r.created DESC"
+    resources = db.execute(sql, params).fetchall()
+
+    # Collect all unique tags for the filter sidebar
+    all_tags_raw = db.execute(
+        "SELECT DISTINCT tags FROM resources WHERE community_id = ? AND tags != ''",
+        (community["id"],)
+    ).fetchall()
+    all_tags = set()
+    for row in all_tags_raw:
+        for t in row["tags"].split(","):
+            t = t.strip()
+            if t:
+                all_tags.add(t)
+    all_tags = sorted(all_tags)
+
+    return render_template("community/resources.html", community=community,
+                           membership=g.membership, resources=resources,
+                           all_tags=all_tags, q=q, rtype=rtype, tag=tag,
+                           human_file_size=_human_file_size)
+
+@app.route("/c/<slug>/resources/new", methods=["GET", "POST"])
+@community_member_required
+def community_new_resource(slug):
+    community = g.community
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        tags = request.form.get("tags", "").strip()
+        url = request.form.get("url", "").strip()
+        file = request.files.get("file")
+
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(f"/c/{slug}/resources/new")
+
+        db = get_db()
+        now = datetime.utcnow().isoformat()
+        resource_type = "link"
+        file_path = ""
+        file_name = ""
+        file_size = 0
+
+        # Handle file upload
+        if file and file.filename:
+            if not _allowed_file(file.filename):
+                flash(f"File type not allowed.", "error")
+                return redirect(f"/c/{slug}/resources/new")
+            file_name = secure_filename(file.filename)
+            ext = file_name.rsplit(".", 1)[1].lower()
+            # Store in community-specific subfolder
+            community_dir = UPLOAD_DIR / str(community["id"])
+            community_dir.mkdir(exist_ok=True)
+            # Unique filename
+            unique_name = f"{int(datetime.utcnow().timestamp())}_{file_name}"
+            dest = community_dir / unique_name
+            file.save(str(dest))
+            file_size = dest.stat().st_size
+            file_path = f"{community['id']}/{unique_name}"
+
+            if ext in ("mp4", "mov", "webm"):
+                resource_type = "video"
+            elif ext == "pdf":
+                resource_type = "pdf"
+            elif ext in ("png", "jpg", "jpeg", "gif", "svg"):
+                resource_type = "image"
+            else:
+                resource_type = "file"
+        elif url:
+            embed = _detect_video_embed(url)
+            if embed:
+                resource_type = "video"
+            else:
+                resource_type = "link"
+        else:
+            flash("Please upload a file or provide a URL.", "error")
+            return redirect(f"/c/{slug}/resources/new")
+
+        db.execute("""
+            INSERT INTO resources (community_id, user_id, title, description,
+                                   resource_type, file_path, file_name, file_size,
+                                   url, tags, created)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (community["id"], session["user_id"], title, description,
+              resource_type, file_path, file_name, file_size, url, tags, now))
+        db.commit()
+        flash("Resource added!", "success")
+        return redirect(f"/c/{slug}/resources")
+
+    return render_template("community/new_resource.html", community=community,
+                           membership=g.membership, resource=None)
+
+@app.route("/c/<slug>/resources/<int:rid>")
+@community_member_required
+def community_view_resource(slug, rid):
+    db = get_db()
+    community = g.community
+    resource = db.execute("""
+        SELECT r.*, u.name AS author_name
+        FROM resources r JOIN users u ON r.user_id = u.id
+        WHERE r.id = ? AND r.community_id = ?
+    """, (rid, community["id"])).fetchone()
+    if not resource:
+        flash("Resource not found.", "error")
+        return redirect(f"/c/{slug}/resources")
+
+    embed_url = _detect_video_embed(resource["url"]) if resource["url"] else None
+
+    return render_template("community/resource_detail.html", community=community,
+                           membership=g.membership, resource=resource,
+                           embed_url=embed_url, human_file_size=_human_file_size)
+
+@app.route("/c/<slug>/resources/<int:rid>/delete", methods=["POST"])
+@community_member_required
+def community_delete_resource(slug, rid):
+    db = get_db()
+    community = g.community
+    resource = db.execute("SELECT * FROM resources WHERE id = ? AND community_id = ?",
+                          (rid, community["id"])).fetchone()
+    is_admin = g.membership["role"] in ("owner", "admin")
+    if not resource or (resource["user_id"] != session["user_id"] and not is_admin):
+        flash("Not allowed.", "error")
+        return redirect(f"/c/{slug}/resources")
+    # Delete file if exists
+    if resource["file_path"]:
+        fpath = UPLOAD_DIR / resource["file_path"]
+        if fpath.exists():
+            fpath.unlink()
+    db.execute("DELETE FROM resources WHERE id = ?", (rid,))
+    db.commit()
+    flash("Resource deleted.", "success")
+    return redirect(f"/c/{slug}/resources")
+
+@app.route("/uploads/<path:filepath>")
+@login_required
+def serve_upload(filepath):
+    return send_from_directory(str(UPLOAD_DIR), filepath)
+
+# ── Community: Members ───────────────────────────────────────────
+
+@app.route("/c/<slug>/members")
+@community_member_required
+def community_members(slug):
+    db = get_db()
+    community = g.community
+    q = request.args.get("q", "").strip()
+    if q:
+        members = db.execute("""
+            SELECT u.*, m.role AS community_role, m.joined
+            FROM memberships m JOIN users u ON m.user_id = u.id
+            WHERE m.community_id = ? AND (u.name LIKE ? OR u.bio LIKE ?)
+            ORDER BY m.role = 'owner' DESC, m.role = 'admin' DESC, u.name
+        """, (community["id"], f"%{q}%", f"%{q}%")).fetchall()
+    else:
+        members = db.execute("""
+            SELECT u.*, m.role AS community_role, m.joined
+            FROM memberships m JOIN users u ON m.user_id = u.id
+            WHERE m.community_id = ?
+            ORDER BY m.role = 'owner' DESC, m.role = 'admin' DESC, u.name
+        """, (community["id"],)).fetchall()
+    return render_template("community/members.html", community=community,
+                           membership=g.membership, members=members, q=q)
+
+@app.route("/c/<slug>/members/<int:uid>")
+@community_member_required
+def community_profile(slug, uid):
+    db = get_db()
+    community = g.community
+    user = get_user_by_id(uid)
+    if not user:
+        flash("User not found.", "error")
+        return redirect(f"/c/{slug}/members")
+    member = get_membership(uid, community["id"])
+    if not member:
+        flash("User is not a member of this community.", "error")
+        return redirect(f"/c/{slug}/members")
+    posts = db.execute("""
+        SELECT p.*, u.name AS author_name,
+               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+        FROM posts p JOIN users u ON p.user_id = u.id
+        WHERE p.user_id = ? AND p.community_id = ?
+        ORDER BY p.created DESC
+    """, (uid, community["id"])).fetchall()
+    return render_template("community/profile.html", community=community,
+                           membership=g.membership, user=user,
+                           member=member, posts=posts)
+
+# ── Community: Admin / Settings ──────────────────────────────────
+
+@app.route("/c/<slug>/settings")
+@community_admin_required
+def community_settings(slug):
+    db = get_db()
+    community = g.community
+    tab = request.args.get("tab", "overview")
+    q = request.args.get("q", "").strip()
+
+    stats = {
+        "total_members": db.execute(
+            "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (community["id"],)
+        ).fetchone()[0],
+        "total_posts": db.execute(
+            "SELECT COUNT(*) FROM posts WHERE community_id = ?", (community["id"],)
+        ).fetchone()[0],
+        "total_comments": db.execute("""
+            SELECT COUNT(*) FROM comments c JOIN posts p ON c.post_id = p.id
+            WHERE p.community_id = ?
+        """, (community["id"],)).fetchone()[0],
+        "total_events": db.execute(
+            "SELECT COUNT(*) FROM events WHERE community_id = ?", (community["id"],)
+        ).fetchone()[0],
+        "new_members_7d": db.execute("""
+            SELECT COUNT(*) FROM memberships
+            WHERE community_id = ? AND joined >= datetime('now', '-7 days')
+        """, (community["id"],)).fetchone()[0],
+    }
+
+    # Members with counts
+    if q:
+        members = db.execute("""
+            SELECT u.*, m.role AS community_role, m.joined,
+                   (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.community_id = ?) AS post_count,
+                   (SELECT COUNT(*) FROM comments c JOIN posts p ON c.post_id = p.id
+                    WHERE c.user_id = u.id AND p.community_id = ?) AS comment_count
+            FROM memberships m JOIN users u ON m.user_id = u.id
+            WHERE m.community_id = ? AND (u.name LIKE ? OR u.email LIKE ?)
+            ORDER BY m.role = 'owner' DESC, m.role = 'admin' DESC, m.joined DESC
+        """, (community["id"], community["id"], community["id"], f"%{q}%", f"%{q}%")).fetchall()
+    else:
+        members = db.execute("""
+            SELECT u.*, m.role AS community_role, m.joined,
+                   (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.community_id = ?) AS post_count,
+                   (SELECT COUNT(*) FROM comments c JOIN posts p ON c.post_id = p.id
+                    WHERE c.user_id = u.id AND p.community_id = ?) AS comment_count
+            FROM memberships m JOIN users u ON m.user_id = u.id
+            WHERE m.community_id = ?
+            ORDER BY m.role = 'owner' DESC, m.role = 'admin' DESC, m.joined DESC
+        """, (community["id"], community["id"], community["id"])).fetchall()
+
+    # Activity
+    activity = []
+    joins = db.execute("""
+        SELECT m.joined AS created, m.user_id, u.name AS user_name
+        FROM memberships m JOIN users u ON m.user_id = u.id
+        WHERE m.community_id = ? ORDER BY m.joined DESC LIMIT 20
+    """, (community["id"],)).fetchall()
+    for j in joins:
+        activity.append({"type": "join", "user_id": j["user_id"],
+                         "user_name": j["user_name"], "target_id": None,
+                         "title": None, "created": j["created"]})
+
+    post_events = db.execute("""
+        SELECT p.id AS target_id, p.title, p.created, p.user_id, u.name AS user_name
+        FROM posts p JOIN users u ON p.user_id = u.id
+        WHERE p.community_id = ? ORDER BY p.created DESC LIMIT 20
+    """, (community["id"],)).fetchall()
+    for p in post_events:
+        activity.append({"type": "post", "user_id": p["user_id"],
+                         "user_name": p["user_name"], "target_id": p["target_id"],
+                         "title": p["title"], "created": p["created"]})
+
+    comment_events = db.execute("""
+        SELECT c.created, c.user_id, u.name AS user_name, p.id AS target_id, p.title
+        FROM comments c JOIN users u ON c.user_id = u.id
+        JOIN posts p ON c.post_id = p.id
+        WHERE p.community_id = ? ORDER BY c.created DESC LIMIT 20
+    """, (community["id"],)).fetchall()
+    for c in comment_events:
+        activity.append({"type": "comment", "user_id": c["user_id"],
+                         "user_name": c["user_name"], "target_id": c["target_id"],
+                         "title": c["title"], "created": c["created"]})
+
+    activity.sort(key=lambda x: x["created"], reverse=True)
+    activity = activity[:50]
+
+    return render_template("community/settings.html", community=community,
+                           membership=g.membership, stats=stats, members=members,
+                           activity=activity, tab=tab, q=q)
+
+@app.route("/c/<slug>/settings/update", methods=["POST"])
+@community_admin_required
+def community_update_settings(slug):
+    db = get_db()
+    community = g.community
+    name = request.form.get("name", "").strip()
+    description = request.form.get("description", "").strip()
+    if not name:
+        flash("Community name is required.", "error")
+        return redirect(f"/c/{slug}/settings?tab=general")
+
+    # Handle banner upload
+    banner = request.files.get("banner")
+    if banner and banner.filename:
+        ext = banner.filename.rsplit(".", 1)[-1].lower()
+        if ext in ("jpg", "jpeg", "png", "webp", "gif"):
+            banner_dir = UPLOAD_DIR / "banners"
+            banner_dir.mkdir(exist_ok=True)
+            banner_name = f"banner_{community['id']}.{ext}"
+            banner.save(str(banner_dir / banner_name))
+            db.execute("UPDATE communities SET banner_path=? WHERE id=?",
+                       (f"banners/{banner_name}", community["id"]))
+
+    db.execute("UPDATE communities SET name=?, description=? WHERE id=?",
+               (name, description, community["id"]))
+    db.commit()
+    flash("Settings updated.", "success")
+    return redirect(f"/c/{slug}/settings?tab=general")
+
+@app.route("/c/<slug>/settings/role/<int:uid>", methods=["POST"])
+@community_admin_required
+def community_change_role(slug, uid):
+    community = g.community
+    if uid == session["user_id"]:
+        flash("Cannot change your own role.", "error")
+        return redirect(f"/c/{slug}/settings")
+    target = get_membership(uid, community["id"])
+    if not target:
+        flash("User is not a member.", "error")
+        return redirect(f"/c/{slug}/settings")
+    if target["role"] == "owner":
+        flash("Cannot change the owner's role.", "error")
+        return redirect(f"/c/{slug}/settings")
+    role = request.form.get("role", "member")
+    if role not in ("member", "admin"):
+        flash("Invalid role.", "error")
+        return redirect(f"/c/{slug}/settings")
+    db = get_db()
+    db.execute("UPDATE memberships SET role=? WHERE user_id=? AND community_id=?",
+               (role, uid, community["id"]))
+    db.commit()
+    flash("Role updated.", "success")
+    return redirect(f"/c/{slug}/settings")
+
+@app.route("/c/<slug>/settings/remove/<int:uid>", methods=["POST"])
+@community_admin_required
+def community_remove_member(slug, uid):
+    community = g.community
+    if uid == session["user_id"]:
+        flash("Cannot remove yourself.", "error")
+        return redirect(f"/c/{slug}/settings")
+    target = get_membership(uid, community["id"])
+    if target and target["role"] == "owner":
+        flash("Cannot remove the owner.", "error")
+        return redirect(f"/c/{slug}/settings")
+    db = get_db()
+    db.execute("DELETE FROM memberships WHERE user_id=? AND community_id=?",
+               (uid, community["id"]))
+    db.commit()
+    flash("Member removed.", "success")
+    return redirect(f"/c/{slug}/settings")
+
+@app.route("/c/<slug>/settings/invite", methods=["POST"])
+@community_admin_required
+def community_invite_member(slug):
+    community = g.community
+    email = request.form.get("email", "").strip().lower()
+    role = request.form.get("role", "member")
+    if role not in ("member", "admin"):
+        role = "member"
+    user = get_user_by_email(email)
+    if not user:
+        flash("No account found with that email.", "error")
+        return redirect(f"/c/{slug}/settings?tab=members")
+    existing = get_membership(user["id"], community["id"])
+    if existing:
+        flash("Already a member.", "error")
+        return redirect(f"/c/{slug}/settings?tab=members")
+    db = get_db()
+    db.execute(
+        "INSERT INTO memberships (user_id, community_id, role, joined) VALUES (?, ?, ?, ?)",
+        (user["id"], community["id"], role, datetime.utcnow().isoformat())
+    )
+    db.commit()
+    flash(f"{user['name']} added to the community.", "success")
+    return redirect(f"/c/{slug}/settings?tab=members")
+
+# ── Community: Insight Loop ──────────────────────────────────────
+
+def get_user_points(user_id, community_id):
+    return get_db().execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM points_ledger WHERE user_id = ? AND community_id = ?",
+        (user_id, community_id)
+    ).fetchone()[0]
+
+@app.route("/c/<slug>/insights")
+@community_member_required
+def community_insights(slug):
+    db = get_db()
+    community = g.community
+    if not community["insights_enabled"]:
+        flash("Insight Loop is not enabled for this community.", "error")
+        return redirect(f"/c/{slug}/")
+
+    polls = db.execute("""
+        SELECT p.*, u.name AS creator_name,
+               (SELECT COUNT(DISTINCT pr.user_id) FROM poll_responses pr WHERE pr.poll_id = p.id) AS response_count,
+               (SELECT COUNT(*) FROM poll_questions pq WHERE pq.poll_id = p.id) AS question_count
+        FROM polls p JOIN users u ON p.user_id = u.id
+        WHERE p.community_id = ? AND p.status = 'active'
+        ORDER BY p.created DESC
+    """, (community["id"],)).fetchall()
+
+    # Check which polls the user has already answered
+    answered_polls = set()
+    for p in polls:
+        answered = db.execute(
+            "SELECT 1 FROM poll_responses WHERE poll_id = ? AND user_id = ? LIMIT 1",
+            (p["id"], session["user_id"])
+        ).fetchone()
+        if answered:
+            answered_polls.add(p["id"])
+
+    my_points = get_user_points(session["user_id"], community["id"])
+
+    rewards = db.execute(
+        "SELECT * FROM rewards WHERE community_id = ? AND active = 1 ORDER BY cost ASC",
+        (community["id"],)
+    ).fetchall()
+
+    # Points leaderboard top 10
+    leaderboard = db.execute("""
+        SELECT u.id, u.name, SUM(pl.amount) AS total_points
+        FROM points_ledger pl JOIN users u ON pl.user_id = u.id
+        WHERE pl.community_id = ?
+        GROUP BY pl.user_id ORDER BY total_points DESC LIMIT 10
+    """, (community["id"],)).fetchall()
+
+    return render_template("community/insights.html", community=community,
+                           membership=g.membership, polls=polls,
+                           answered_polls=answered_polls, my_points=my_points,
+                           rewards=rewards, leaderboard=leaderboard)
+
+@app.route("/c/<slug>/insights/poll/<int:pid>")
+@community_member_required
+def community_poll_view(slug, pid):
+    db = get_db()
+    community = g.community
+    poll = db.execute("SELECT p.*, u.name AS creator_name FROM polls p JOIN users u ON p.user_id = u.id WHERE p.id = ? AND p.community_id = ?",
+                      (pid, community["id"])).fetchone()
+    if not poll:
+        flash("Poll not found.", "error")
+        return redirect(f"/c/{slug}/insights")
+    questions = db.execute("SELECT * FROM poll_questions WHERE poll_id = ? ORDER BY sort_order", (pid,)).fetchall()
+    already_answered = db.execute("SELECT 1 FROM poll_responses WHERE poll_id = ? AND user_id = ? LIMIT 1",
+                                  (pid, session["user_id"])).fetchone() is not None
+    return render_template("community/poll.html", community=community,
+                           membership=g.membership, poll=poll, questions=questions,
+                           already_answered=already_answered)
+
+@app.route("/c/<slug>/insights/poll/<int:pid>/submit", methods=["POST"])
+@community_member_required
+def community_poll_submit(slug, pid):
+    db = get_db()
+    community = g.community
+    poll = db.execute("SELECT * FROM polls WHERE id = ? AND community_id = ? AND status = 'active'",
+                      (pid, community["id"])).fetchone()
+    if not poll:
+        flash("Poll not found.", "error")
+        return redirect(f"/c/{slug}/insights")
+    # Check not already answered
+    already = db.execute("SELECT 1 FROM poll_responses WHERE poll_id = ? AND user_id = ? LIMIT 1",
+                         (pid, session["user_id"])).fetchone()
+    if already:
+        flash("You've already answered this poll.", "error")
+        return redirect(f"/c/{slug}/insights")
+
+    questions = db.execute("SELECT * FROM poll_questions WHERE poll_id = ?", (pid,)).fetchall()
+    now = datetime.utcnow().isoformat()
+    for q in questions:
+        answer = request.form.get(f"q_{q['id']}", "").strip()
+        if answer:
+            db.execute("INSERT INTO poll_responses (poll_id, question_id, user_id, answer, created) VALUES (?,?,?,?,?)",
+                       (pid, q["id"], session["user_id"], answer, now))
+
+    # Award points
+    db.execute("INSERT INTO points_ledger (user_id, community_id, amount, reason, ref_type, ref_id, created) VALUES (?,?,?,?,?,?,?)",
+               (session["user_id"], community["id"], poll["points_reward"],
+                f'Completed poll: {poll["title"]}', 'poll', pid, now))
+    db.commit()
+    flash(f"Thanks! You earned {poll['points_reward']} points.", "success")
+    return redirect(f"/c/{slug}/insights")
+
+@app.route("/c/<slug>/insights/poll/<int:pid>/results")
+@community_member_required
+def community_poll_results(slug, pid):
+    db = get_db()
+    community = g.community
+    poll = db.execute("SELECT * FROM polls WHERE id = ? AND community_id = ?",
+                      (pid, community["id"])).fetchone()
+    if not poll:
+        flash("Poll not found.", "error")
+        return redirect(f"/c/{slug}/insights")
+    questions = db.execute("SELECT * FROM poll_questions WHERE poll_id = ? ORDER BY sort_order", (pid,)).fetchall()
+    results = {}
+    for q in questions:
+        responses = db.execute("SELECT answer, COUNT(*) AS cnt FROM poll_responses WHERE question_id = ? GROUP BY answer ORDER BY cnt DESC",
+                               (q["id"],)).fetchall()
+        total = sum(r["cnt"] for r in responses)
+        results[q["id"]] = {"responses": responses, "total": total}
+    response_count = db.execute("SELECT COUNT(DISTINCT user_id) FROM poll_responses WHERE poll_id = ?", (pid,)).fetchone()[0]
+    is_admin = g.membership["role"] in ("owner", "admin")
+    return render_template("community/poll_results.html", community=community,
+                           membership=g.membership, poll=poll, questions=questions,
+                           results=results, response_count=response_count, is_admin=is_admin)
+
+@app.route("/c/<slug>/insights/reward/<int:rid>/claim", methods=["POST"])
+@community_member_required
+def community_claim_reward(slug, rid):
+    db = get_db()
+    community = g.community
+    reward = db.execute("SELECT * FROM rewards WHERE id = ? AND community_id = ? AND active = 1",
+                        (rid, community["id"])).fetchone()
+    if not reward:
+        flash("Reward not found.", "error")
+        return redirect(f"/c/{slug}/insights")
+    my_points = get_user_points(session["user_id"], community["id"])
+    if my_points < reward["cost"]:
+        flash("Not enough points.", "error")
+        return redirect(f"/c/{slug}/insights")
+    if reward["quantity"] != -1:
+        claimed = db.execute("SELECT COUNT(*) FROM reward_claims WHERE reward_id = ?", (rid,)).fetchone()[0]
+        if claimed >= reward["quantity"]:
+            flash("Reward is sold out.", "error")
+            return redirect(f"/c/{slug}/insights")
+    now = datetime.utcnow().isoformat()
+    db.execute("INSERT INTO reward_claims (reward_id, user_id, community_id, created) VALUES (?,?,?,?)",
+               (rid, session["user_id"], community["id"], now))
+    db.execute("INSERT INTO points_ledger (user_id, community_id, amount, reason, ref_type, ref_id, created) VALUES (?,?,?,?,?,?,?)",
+               (session["user_id"], community["id"], -reward["cost"],
+                f'Claimed reward: {reward["title"]}', 'reward', rid, now))
+    db.commit()
+    flash(f"Reward claimed! '{reward['title']}'", "success")
+    return redirect(f"/c/{slug}/insights")
+
+# Admin: Create poll
+@app.route("/c/<slug>/insights/create", methods=["GET", "POST"])
+@community_admin_required
+def community_create_poll(slug):
+    community = g.community
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        points = int(request.form.get("points_reward", 10))
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(f"/c/{slug}/insights/create")
+        db = get_db()
+        now = datetime.utcnow().isoformat()
+        cursor = db.execute("INSERT INTO polls (community_id, user_id, title, description, points_reward, created) VALUES (?,?,?,?,?,?)",
+                            (community["id"], session["user_id"], title, description, points, now))
+        poll_id = cursor.lastrowid
+        # Parse questions from form
+        i = 0
+        while True:
+            q = request.form.get(f"question_{i}", "").strip()
+            if not q:
+                break
+            qtype = request.form.get(f"type_{i}", "text")
+            options = request.form.get(f"options_{i}", "").strip()
+            db.execute("INSERT INTO poll_questions (poll_id, question, question_type, options, sort_order) VALUES (?,?,?,?,?)",
+                       (poll_id, q, qtype, options, i))
+            i += 1
+        db.commit()
+        flash("Poll created!", "success")
+        return redirect(f"/c/{slug}/insights")
+    return render_template("community/create_poll.html", community=community, membership=g.membership)
+
+# Admin: Create reward
+@app.route("/c/<slug>/insights/rewards/create", methods=["POST"])
+@community_admin_required
+def community_create_reward(slug):
+    community = g.community
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip()
+    cost = int(request.form.get("cost", 50))
+    quantity = int(request.form.get("quantity", -1))
+    if not title:
+        flash("Reward title is required.", "error")
+        return redirect(f"/c/{slug}/insights")
+    db = get_db()
+    db.execute("INSERT INTO rewards (community_id, title, description, cost, quantity, created) VALUES (?,?,?,?,?,?)",
+               (community["id"], title, description, cost, quantity, datetime.utcnow().isoformat()))
+    db.commit()
+    flash("Reward added!", "success")
+    return redirect(f"/c/{slug}/insights")
+
+# Admin: Toggle insights
+@app.route("/c/<slug>/insights/toggle", methods=["POST"])
+@community_admin_required
+def community_toggle_insights(slug):
+    db = get_db()
+    community = g.community
+    new_val = 0 if community["insights_enabled"] else 1
+    db.execute("UPDATE communities SET insights_enabled = ? WHERE id = ?", (new_val, community["id"]))
+    db.commit()
+    flash(f"Insight Loop {'enabled' if new_val else 'disabled'}.", "success")
+    return redirect(f"/c/{slug}/settings?tab=general")
+
+# Admin: Close poll
+@app.route("/c/<slug>/insights/poll/<int:pid>/close", methods=["POST"])
+@community_admin_required
+def community_close_poll(slug, pid):
+    db = get_db()
+    db.execute("UPDATE polls SET status = 'closed' WHERE id = ? AND community_id = ?", (pid, g.community["id"]))
+    db.commit()
+    flash("Poll closed.", "success")
+    return redirect(f"/c/{slug}/insights")
+
+# ── Community: Lander (Page Builder) ─────────────────────────────
+
+@app.route("/c/<slug>/lander")
+@community_admin_required
+def community_lander(slug):
+    community = g.community
+    config = community["lander_config"] or "[]"
+    return render_template("community/lander.html", community=community,
+                           membership=g.membership, config=config)
+
+@app.route("/c/<slug>/lander/save", methods=["POST"])
+@community_admin_required
+def community_lander_save(slug):
+    community = g.community
+    config = request.get_json()
+    if config is None:
+        return {"error": "Invalid JSON"}, 400
+    db = get_db()
+    db.execute("UPDATE communities SET lander_config = ? WHERE id = ?",
+               (json.dumps(config), community["id"]))
+    db.commit()
+    return {"ok": True}
+
+@app.route("/c/<slug>/site")
+def community_site(slug):
+    """Public landing page — no auth required."""
+    db = get_db()
+    community = db.execute("SELECT * FROM communities WHERE slug = ?", (slug,)).fetchone()
+    if not community:
+        abort(404)
+    config = json.loads(community["lander_config"] or "[]")
+    member_count = db.execute(
+        "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (community["id"],)
+    ).fetchone()[0]
+    return render_template("community/site.html", community=community,
+                           rows=config, member_count=member_count)
+
+# ══════════════════════════════════════════════════════════════════
+#  PLATFORM ADMIN — /admin/...
+# ══════════════════════════════════════════════════════════════════
 
 @app.route("/admin")
-@admin_required
-def admin_panel():
-    users = _load_users()
-    current_user = _get_user_by_id(session["user_id"])
-    return render_template_string(ADMIN_HTML, users=users, current_user=current_user,
-                                  nav=_nav(current_user),
-                                  msg=request.args.get("msg"), err=request.args.get("err"))
+@platform_admin_required
+def admin_dashboard():
+    db = get_db()
+    tab = request.args.get("tab", "communities")
 
-@app.route("/admin/users/add", methods=["POST"])
-@admin_required
-def admin_add_user():
-    name     = request.form.get("name", "").strip()
-    email    = request.form.get("email", "").strip().lower()
-    password = request.form.get("password", "")
-    role     = request.form.get("role", "user")
-    if not name or not email or not password:
-        return redirect("/admin?err=All+fields+required")
-    if len(password) < 8:
-        return redirect("/admin?err=Password+must+be+at+least+8+characters")
-    if _get_user_by_email(email):
-        return redirect("/admin?err=Email+already+exists")
-    users = _load_users()
-    new_id = str(max((int(u["id"]) for u in users if u["id"].isdigit()), default=0) + 1)
-    users.append({
-        "id": new_id,
-        "name": name,
-        "email": email,
-        "password_hash": generate_password_hash(password),
-        "role": role,
-        "created": datetime.utcnow().isoformat(),
-    })
-    _save_users(users)
-    return redirect(f"/admin?msg=User+{name}+added")
+    stats = {
+        "total_users": db.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+        "total_communities": db.execute("SELECT COUNT(*) FROM communities").fetchone()[0],
+        "total_posts": db.execute("SELECT COUNT(*) FROM posts").fetchone()[0],
+        "total_comments": db.execute("SELECT COUNT(*) FROM comments").fetchone()[0],
+        "new_users_7d": db.execute(
+            "SELECT COUNT(*) FROM users WHERE created >= datetime('now', '-7 days')"
+        ).fetchone()[0],
+        "new_communities_7d": db.execute(
+            "SELECT COUNT(*) FROM communities WHERE created >= datetime('now', '-7 days')"
+        ).fetchone()[0],
+    }
 
-@app.route("/admin/users/delete/<uid>", methods=["POST"])
-@admin_required
+    communities = db.execute("""
+        SELECT c.*, u.name AS owner_name,
+               (SELECT COUNT(*) FROM memberships m WHERE m.community_id = c.id) AS member_count,
+               (SELECT COUNT(*) FROM posts p WHERE p.community_id = c.id) AS post_count,
+               (SELECT COUNT(*) FROM comments cm JOIN posts p2 ON cm.post_id = p2.id WHERE p2.community_id = c.id) AS comment_count
+        FROM communities c JOIN users u ON c.owner_id = u.id
+        ORDER BY c.created DESC
+    """).fetchall()
+
+    users = db.execute("""
+        SELECT u.*,
+               (SELECT COUNT(*) FROM communities c WHERE c.owner_id = u.id) AS communities_owned,
+               (SELECT COUNT(*) FROM memberships m WHERE m.user_id = u.id) AS communities_joined
+        FROM users u ORDER BY u.created DESC
+    """).fetchall()
+
+    # Platform-wide activity
+    activity = []
+    for u in db.execute("SELECT id AS user_id, name AS user_name, created FROM users ORDER BY created DESC LIMIT 20").fetchall():
+        activity.append({"type": "signup", "user_name": u["user_name"], "user_id": u["user_id"],
+                         "detail": None, "slug": None, "created": u["created"]})
+    for c in db.execute("""
+        SELECT c.name, c.slug, c.created, u.name AS user_name, u.id AS user_id
+        FROM communities c JOIN users u ON c.owner_id = u.id ORDER BY c.created DESC LIMIT 20
+    """).fetchall():
+        activity.append({"type": "community", "user_name": c["user_name"], "user_id": c["user_id"],
+                         "detail": c["name"], "slug": c["slug"], "created": c["created"]})
+    for p in db.execute("""
+        SELECT p.title, p.created, p.id, u.name AS user_name, u.id AS user_id, c.slug, c.name AS community_name
+        FROM posts p JOIN users u ON p.user_id = u.id JOIN communities c ON p.community_id = c.id
+        ORDER BY p.created DESC LIMIT 20
+    """).fetchall():
+        activity.append({"type": "post", "user_name": p["user_name"], "user_id": p["user_id"],
+                         "detail": p["title"], "slug": p["slug"], "post_id": p["id"],
+                         "community_name": p["community_name"], "created": p["created"]})
+
+    activity.sort(key=lambda x: x["created"], reverse=True)
+    activity = activity[:50]
+
+    return render_template("admin.html", stats=stats, communities=communities,
+                           users=users, activity=activity, tab=tab)
+
+@app.route("/admin/community/<int:cid>")
+@platform_admin_required
+def admin_community_detail(cid):
+    db = get_db()
+    community = db.execute("SELECT * FROM communities WHERE id = ?", (cid,)).fetchone()
+    if not community:
+        flash("Community not found.", "error")
+        return redirect("/admin")
+
+    stats = {
+        "total_members": db.execute(
+            "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (cid,)
+        ).fetchone()[0],
+        "total_posts": db.execute(
+            "SELECT COUNT(*) FROM posts WHERE community_id = ?", (cid,)
+        ).fetchone()[0],
+        "total_comments": db.execute("""
+            SELECT COUNT(*) FROM comments c JOIN posts p ON c.post_id = p.id WHERE p.community_id = ?
+        """, (cid,)).fetchone()[0],
+    }
+
+    members = db.execute("""
+        SELECT u.*, m.role AS community_role, m.joined,
+               (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id AND p.community_id = ?) AS post_count,
+               (SELECT COUNT(*) FROM comments c JOIN posts p ON c.post_id = p.id
+                WHERE c.user_id = u.id AND p.community_id = ?) AS comment_count
+        FROM memberships m JOIN users u ON m.user_id = u.id
+        WHERE m.community_id = ?
+        ORDER BY m.role = 'owner' DESC, m.role = 'admin' DESC, m.joined DESC
+    """, (cid, cid, cid)).fetchall()
+
+    recent_posts = db.execute("""
+        SELECT p.*, u.name AS author_name,
+               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+        FROM posts p JOIN users u ON p.user_id = u.id
+        WHERE p.community_id = ?
+        ORDER BY p.created DESC LIMIT 20
+    """, (cid,)).fetchall()
+
+    return render_template("admin_community.html", community=community,
+                           stats=stats, members=members, recent_posts=recent_posts)
+
+@app.route("/admin/community/<int:cid>/delete", methods=["POST"])
+@platform_admin_required
+def admin_delete_community(cid):
+    db = get_db()
+    db.execute("DELETE FROM communities WHERE id = ?", (cid,))
+    db.commit()
+    flash("Community deleted.", "success")
+    return redirect("/admin")
+
+@app.route("/admin/community/<int:cid>/remove/<int:uid>", methods=["POST"])
+@platform_admin_required
+def admin_remove_community_member(cid, uid):
+    db = get_db()
+    db.execute("DELETE FROM memberships WHERE user_id=? AND community_id=?", (uid, cid))
+    db.commit()
+    flash("Member removed.", "success")
+    return redirect(f"/admin/community/{cid}")
+
+@app.route("/admin/community/<int:cid>/role/<int:uid>", methods=["POST"])
+@platform_admin_required
+def admin_change_community_role(cid, uid):
+    role = request.form.get("role", "member")
+    if role not in ("member", "admin"):
+        role = "member"
+    db = get_db()
+    db.execute("UPDATE memberships SET role=? WHERE user_id=? AND community_id=?", (role, uid, cid))
+    db.commit()
+    flash("Role updated.", "success")
+    return redirect(f"/admin/community/{cid}")
+
+@app.route("/admin/users/<int:uid>/toggle-admin", methods=["POST"])
+@platform_admin_required
+def admin_toggle_platform_admin(uid):
+    if uid == session["user_id"]:
+        flash("Cannot change your own admin status.", "error")
+        return redirect("/admin?tab=users")
+    db = get_db()
+    user = get_user_by_id(uid)
+    if not user:
+        flash("User not found.", "error")
+        return redirect("/admin?tab=users")
+    db.execute("UPDATE users SET is_admin = ? WHERE id = ?", (0 if user["is_admin"] else 1, uid))
+    db.commit()
+    flash(f"{'Removed' if user['is_admin'] else 'Granted'} platform admin for {user['name']}.", "success")
+    return redirect("/admin?tab=users")
+
+@app.route("/admin/users/<int:uid>/delete", methods=["POST"])
+@platform_admin_required
 def admin_delete_user(uid):
     if uid == session["user_id"]:
-        return redirect("/admin?err=Cannot+delete+yourself")
-    users = [u for u in _load_users() if u["id"] != uid]
-    _save_users(users)
-    return redirect("/admin?msg=User+deleted")
+        flash("Cannot delete yourself.", "error")
+        return redirect("/admin?tab=users")
+    db = get_db()
+    db.execute("DELETE FROM users WHERE id = ?", (uid,))
+    db.commit()
+    flash("User deleted.", "success")
+    return redirect("/admin?tab=users")
 
-# ══════════════════════════════════════════════════════════════════
-#  ── YOUR APP ──
-#  Build your application routes and logic below this line.
-#  The user is available via: _get_user_by_id(session["user_id"])
-#  Protect routes with @login_required or @admin_required.
-# ══════════════════════════════════════════════════════════════════
+@app.route("/admin/users/<int:uid>/impersonate", methods=["POST"])
+@platform_admin_required
+def admin_impersonate(uid):
+    user = get_user_by_id(uid)
+    if not user:
+        flash("User not found.", "error")
+        return redirect("/admin?tab=users")
+    # Store real admin id so we can switch back
+    session["impersonator_id"] = session["user_id"]
+    session["user_id"] = user["id"]
+    session["user_name"] = user["name"]
+    flash(f"Now viewing as {user['name']}. Use the banner to switch back.", "success")
+    return redirect("/dashboard")
 
-HOME_HTML = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Home</title>
-<style>""" + BASE_CSS + """</style></head><body>
-{{ nav | safe }}
-<div class="page">
-  <h1>Welcome, {{ user.name }}</h1>
-  <div class="sub">Your app starts here.</div>
-  <div class="card">
-    <div style="color:#444;font-size:13px;">Build your app beneath the <code style="color:#888;">── YOUR APP ──</code> section in app.py.</div>
-  </div>
-</div></body></html>"""
-
-@app.route("/")
+@app.route("/admin/stop-impersonating", methods=["POST"])
 @login_required
-def home():
-    user = _get_user_by_id(session["user_id"])
-    return render_template_string(HOME_HTML, user=user, nav=_nav(user))
+def admin_stop_impersonating():
+    real_id = session.pop("impersonator_id", None)
+    if real_id:
+        user = get_user_by_id(real_id)
+        if user:
+            session["user_id"] = user["id"]
+            session["user_name"] = user["name"]
+            flash("Switched back to your admin account.", "success")
+            return redirect("/admin")
+    return redirect("/dashboard")
 
-# ── Boot ───────────────────────────────────────────────────────────
+# ── Bookmarks & Notifications ────────────────────────────────────
 
-_init_default_admin()
+@app.route("/c/<slug>/bookmarks")
+@community_member_required
+def community_bookmarks(slug):
+    db = get_db()
+    community = g.community
+    posts = db.execute("""
+        SELECT p.*, u.name AS author_name,
+               (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count,
+               (SELECT COALESCE(SUM(v.value), 0) FROM votes v WHERE v.post_id = p.id) AS vote_score,
+               b.created AS bookmarked_at
+        FROM bookmarks b
+        JOIN posts p ON b.post_id = p.id
+        JOIN users u ON p.user_id = u.id
+        WHERE b.user_id = ? AND p.community_id = ?
+        ORDER BY b.created DESC
+    """, (session["user_id"], community["id"])).fetchall()
+    return render_template("community/bookmarks.html", community=community,
+                           membership=g.membership, posts=posts)
+
+@app.route("/c/<slug>/notifications")
+@community_member_required
+def community_notifications(slug):
+    db = get_db()
+    community = g.community
+    notifications = db.execute("""
+        SELECT n.*, p.title AS post_title
+        FROM notifications n
+        LEFT JOIN posts p ON n.post_id = p.id
+        WHERE n.user_id = ? AND n.community_id = ?
+        ORDER BY n.created DESC LIMIT 50
+    """, (session["user_id"], community["id"])).fetchall()
+    # Mark all as read
+    db.execute(
+        "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND community_id = ?",
+        (session["user_id"], community["id"])
+    )
+    db.commit()
+    return render_template("community/notifications.html", community=community,
+                           membership=g.membership, notifications=notifications)
+
+# ── Screenshots ──────────────────────────────────────────────────
+
+SCREENSHOTS_DIR = APP_DIR / "static" / "screenshots"
+
+@app.route("/screenshots")
+@login_required
+def screenshots_page():
+    manifest_path = SCREENSHOTS_DIR / "manifest.json"
+    manifest = {}
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+    return render_template("screenshots.html", manifest=manifest)
+
+@app.route("/screenshots/capture", methods=["POST"])
+@login_required
+def screenshots_capture():
+    script = APP_DIR / "screenshots.py"
+    try:
+        subprocess.Popen(
+            [sys.executable, str(script)],
+            cwd=str(APP_DIR),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        flash("Screenshot capture started. Refresh in ~30 seconds to see results.", "success")
+    except Exception as e:
+        flash(f"Failed to start capture: {e}", "error")
+    return redirect("/screenshots")
+
+# ── Boot ─────────────────────────────────────────────────────────
+
+init_db()
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=DEFAULT_PORT)
+    app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", host="0.0.0.0", port=DEFAULT_PORT)

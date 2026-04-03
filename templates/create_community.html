@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Create Community{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <h1>Create a Community</h1>
+  <div class="sub">Set up a new space for your group</div>
+
+  <div class="card">
+    <form method="POST">
+      <div class="field">
+        <div class="label">Community Name</div>
+        <input name="name" placeholder="e.g. Design Team, Book Club, Startup Hub" required autofocus />
+      </div>
+      <div class="field">
+        <div class="label">URL Slug</div>
+        <input name="slug" placeholder="e.g. design-team (auto-generated from name if blank)" />
+        <div style="font-size:11px;color:#444;margin-top:4px;">community.revolv.uk/c/<strong>your-slug</strong>/</div>
+      </div>
+      <div class="field">
+        <div class="label">Description</div>
+        <textarea name="description" placeholder="What's this community about?"></textarea>
+      </div>
+      <button class="btn btn-primary">Create Community</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

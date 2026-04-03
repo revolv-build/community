@@ -1,0 +1,84 @@
+{% extends "community/base.html" %}
+{% block title %}Resources - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page">
+  <div class="flex-between mb-24">
+    <div>
+      <h1>Resources</h1>
+      <div class="sub" style="margin-bottom:0;">Files, videos, and links shared in {{ community.name }}</div>
+    </div>
+    <a href="/c/{{ community.slug }}/resources/new" class="btn btn-primary">Add Resource</a>
+  </div>
+
+  <!-- Filters -->
+  <div class="resource-filters mb-24">
+    <form method="GET" class="flex gap-8" style="flex-wrap:wrap;align-items:end;">
+      <div>
+        <input name="q" value="{{ q or '' }}" placeholder="Search resources..." style="max-width:240px;" />
+      </div>
+      <div>
+        <select name="type" onchange="this.form.submit()" style="width:auto;">
+          <option value="">All types</option>
+          <option value="pdf" {{ 'selected' if rtype == 'pdf' else '' }}>PDFs</option>
+          <option value="video" {{ 'selected' if rtype == 'video' else '' }}>Videos</option>
+          <option value="image" {{ 'selected' if rtype == 'image' else '' }}>Images</option>
+          <option value="file" {{ 'selected' if rtype == 'file' else '' }}>Files</option>
+          <option value="link" {{ 'selected' if rtype == 'link' else '' }}>Links</option>
+        </select>
+      </div>
+      {% if all_tags %}
+      <div>
+        <select name="tag" onchange="this.form.submit()" style="width:auto;">
+          <option value="">All tags</option>
+          {% for t in all_tags %}
+          <option value="{{ t }}" {{ 'selected' if tag == t else '' }}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      {% if q or rtype or tag %}
+      <a href="/c/{{ community.slug }}/resources" class="btn btn-ghost btn-sm">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if resources %}
+  <div class="resource-grid">
+    {% for r in resources %}
+    <a href="/c/{{ community.slug }}/resources/{{ r.id }}" class="resource-card">
+      <div class="resource-card-icon resource-icon-{{ r.resource_type }}">
+        {% if r.resource_type == 'pdf' %}PDF
+        {% elif r.resource_type == 'video' %}&#9654;
+        {% elif r.resource_type == 'image' %}IMG
+        {% elif r.resource_type == 'link' %}&#8599;
+        {% else %}FILE{% endif %}
+      </div>
+      <div class="resource-card-body">
+        <div class="resource-card-title">{{ r.title }}</div>
+        <div class="resource-card-meta">
+          {{ r.author_name }} &middot; {{ r.created[:10] }}
+          {% if r.file_size %} &middot; {{ human_file_size(r.file_size) }}{% endif %}
+          <span class="badge badge-{{ 'admin' if r.resource_type == 'video' else 'member' }}" style="margin-left:4px;">{{ r.resource_type }}</span>
+        </div>
+        {% if r.tags %}
+        <div class="resource-card-tags">
+          {% for t in r.tags.split(',') %}
+          {% if t.strip() %}<span class="resource-tag">{{ t.strip() }}</span>{% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">
+    {% if q or rtype or tag %}
+      No resources match your filters.
+    {% else %}
+      No resources yet. Share something with the community!
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Manage {{ community.name }} - Admin{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1100px;">
+  <div class="flex-between mb-24">
+    <div>
+      <div style="font-size:12px;color:#555;margin-bottom:8px;"><a href="/admin" style="color:#7070e0;">Admin</a> / Communities</div>
+      <h1>{{ community.name }}</h1>
+      <div class="sub" style="margin-bottom:0;">/c/{{ community.slug }}/ {% if community.description %}&middot; {{ community.description }}{% endif %}</div>
+    </div>
+    <a href="/c/{{ community.slug }}/" class="btn btn-ghost">Visit Community</a>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid mb-24">
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_members }}</div>
+      <div class="stat-label">Members</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_posts }}</div>
+      <div class="stat-label">Posts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.total_comments }}</div>
+      <div class="stat-label">Comments</div>
+    </div>
+  </div>
+
+  <!-- Members -->
+  <div class="card mb-24">
+    <h2>Members ({{ members | length }})</h2>
+    <table>
+      <tr><th>Name</th><th>Email</th><th>Role</th><th>Posts</th><th>Comments</th><th>Joined</th><th></th></tr>
+      {% for u in members %}
+      <tr>
+        <td style="color:#eee;">{{ u.name }}</td>
+        <td>{{ u.email }}</td>
+        <td>
+          {% if u.community_role == 'owner' %}
+          <span class="badge badge-owner">owner</span>
+          {% else %}
+          <form method="POST" action="/admin/community/{{ community.id }}/role/{{ u.id }}" style="display:inline;">
+            <select name="role" onchange="this.form.submit()" style="width:auto;padding:4px 8px;font-size:11px;">
+              <option value="member" {{ 'selected' if u.community_role == 'member' else '' }}>member</option>
+              <option value="admin" {{ 'selected' if u.community_role == 'admin' else '' }}>admin</option>
+            </select>
+          </form>
+          {% endif %}
+        </td>
+        <td>{{ u.post_count }}</td>
+        <td>{{ u.comment_count }}</td>
+        <td>{{ u.joined[:10] if u.joined else '—' }}</td>
+        <td style="text-align:right;">
+          {% if u.community_role != 'owner' %}
+          <form method="POST" action="/admin/community/{{ community.id }}/remove/{{ u.id }}" style="display:inline;" onsubmit="return confirm('Remove {{ u.name }}?')">
+            <button class="btn btn-danger btn-sm">Remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- Recent Posts -->
+  <div class="card">
+    <h2>Recent Posts</h2>
+    {% if recent_posts %}
+    <table>
+      <tr><th>Title</th><th>Author</th><th>Comments</th><th>Created</th></tr>
+      {% for p in recent_posts %}
+      <tr>
+        <td><a href="/c/{{ community.slug }}/posts/{{ p.id }}" style="color:#eee;">{{ p.title }}</a></td>
+        <td>{{ p.author_name }}</td>
+        <td>{{ p.comment_count }}</td>
+        <td>{{ p.created[:10] }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div class="empty">No posts yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "community/base.html" %}
+{% block title %}{{ 'Edit Event' if event else 'New Event' }} - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <h1>{{ 'Edit Event' if event else 'Create Event' }}</h1>
+  <div class="sub">{{ 'Update event details' if event else 'Schedule something for ' + community.name }}</div>
+
+  <div class="card">
+    <form method="POST">
+      <div class="field">
+        <div class="label">Event Title</div>
+        <input name="title" value="{{ event.title if event else '' }}" placeholder="e.g. Weekly Standup, Workshop, Meetup" required autofocus />
+      </div>
+      <div class="field">
+        <div class="label">Description</div>
+        <textarea name="description" style="min-height:120px;" placeholder="What's this event about?">{{ event.description if event else '' }}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div class="field">
+          <div class="label">Date</div>
+          <input name="event_date" type="date" value="{{ event.event_date if event else '' }}" required />
+        </div>
+        <div class="field">
+          <div class="label">Start Time</div>
+          <input name="event_time" type="time" value="{{ event.event_time if event else '' }}" />
+        </div>
+        <div class="field">
+          <div class="label">End Time</div>
+          <input name="end_time" type="time" value="{{ event.end_time if event else '' }}" />
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <div class="label">Location</div>
+          <input name="location" value="{{ event.location if event else '' }}" placeholder="e.g. Office, Zoom, London" />
+        </div>
+        <div class="field">
+          <div class="label">Type</div>
+          <select name="location_type">
+            <option value="in-person" {{ 'selected' if event and event.location_type == 'in-person' else '' }}>In Person</option>
+            <option value="online" {{ 'selected' if event and event.location_type == 'online' else '' }}>Online</option>
+            <option value="hybrid" {{ 'selected' if event and event.location_type == 'hybrid' else '' }}>Hybrid</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">Meeting Link (optional)</div>
+        <input name="link" value="{{ event.link if event else '' }}" placeholder="https://zoom.us/..." />
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-primary">{{ 'Update Event' if event else 'Create Event' }}</button>
+        <a href="/c/{{ community.slug }}/events{{ '/' ~ event.id if event else '' }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

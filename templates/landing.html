@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Community — Build your own community space</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav>
+  <a href="/" class="logo">&#9672; Community</a>
+  <div class="nav-links">
+    <a href="/login">Sign in</a>
+    <a href="/register" class="btn btn-primary" style="padding:6px 16px;">Get Started</a>
+  </div>
+</nav>
+
+<div class="landing-hero">
+  <h1 class="landing-title">Build your community.</h1>
+  <p class="landing-sub">Create a private space for your team, group, or audience. Discussions, member profiles, and admin tools — all in one place.</p>
+  <div class="landing-actions">
+    <a href="/register" class="btn btn-primary" style="padding:12px 32px;font-size:15px;">Create Your Community</a>
+    <a href="/login" class="btn btn-ghost" style="padding:12px 32px;font-size:15px;">Sign In</a>
+  </div>
+</div>
+
+<div class="page" style="max-width:800px;">
+  <div class="landing-features">
+    <div class="feature-card">
+      <div class="feature-icon">&#9998;</div>
+      <h3>Discussions</h3>
+      <p>Posts and comments to keep your community talking.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#9775;</div>
+      <h3>Member Profiles</h3>
+      <p>Each member gets a profile with bio, location, and links.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">&#9881;</div>
+      <h3>Admin Tools</h3>
+      <p>Manage members, roles, and activity from one dashboard.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

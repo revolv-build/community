@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - Community</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="page-narrow">
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="font-size:28px;margin-bottom:8px;">&#9672;</div>
+    <h1>Community</h1>
+    <div class="sub">Sign in to continue</div>
+  </div>
+  {% if err %}<div class="msg msg-err">{{ err }}</div>{% endif %}
+  <div class="card">
+    <form method="POST">
+      <div class="field"><div class="label">Email</div><input name="email" type="email" required autofocus /></div>
+      <div class="field"><div class="label">Password</div><input name="password" type="password" required /></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;">Sign in</button>
+    </form>
+  </div>
+  <div style="text-align:center;margin-top:16px;font-size:13px;color:#555;">
+    Don't have an account? <a href="/register" style="color:#fff;">Sign up</a>
+  </div>
+</div>
+</body>
+</html>

@@ -15,7 +15,8 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /root/myapp
+            cd /root/community
             git pull origin main
+            source venv/bin/activate
             pip install -r requirements.txt -q
-            systemctl restart myapp
+            systemctl restart community
