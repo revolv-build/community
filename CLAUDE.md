@@ -262,7 +262,18 @@ Also built:
 - Favicon (SVG) and OG meta tags on all pages
 - Seeded 8 content entries across all channels
 
+Also built:
+- Major event upgrade: .ics calendar export, Google/Outlook calendar links, capacity/waitlist with auto-promote, auto discussion threads, event types, speakers, post-event content (recording/slides/notes)
+- Admin dashboard redesigned as "Command Centre" with pulsing Live indicator, colour-coded stats, icon tabs
+- Admin bar redesigned with gradient, icons, mobile-responsive (icons only on small screens)
+- Clean feed previews (strip_markdown removes syntax from preview text)
+- Profile photo uploads on Account page
+- Toast notifications replacing flash messages (auto-dismiss, stacked, animated)
+- Cleaned up 5 orphaned templates and test data
+- Footer with Terms/Privacy/Support links and placeholder legal pages
+
 Where we left off:
 - Resend API key still needs configuring for live emails
 - Next QOL features to consider: email digest, custom categories management, member roles/badges, invite codes
-- From the audit: avatar uploads, moderation tools, Stripe billing, PostgreSQL migration
+- From the audit: moderation tools, Stripe billing, PostgreSQL migration
+- Admin login changed to haydn@revolv.uk
