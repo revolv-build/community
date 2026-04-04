@@ -242,5 +242,18 @@ Seeded "The Content Cooking Club" community with 5 members, 13 posts, realistic 
 
 Where we left off:
 - Email system built but not activated (needs Resend API key + domain verification)
-- Next priorities from the audit: rich text editor, avatar uploads, moderation tools, Stripe billing
+- Next priorities from the audit: avatar uploads, moderation tools, Stripe billing
 - Orphaned templates from single-tenant era can be cleaned up
+
+### 2026-04-04
+**QOL improvements for community owners.**
+
+Built:
+- Rich text editor (EasyMDE + Python-Markdown + bleach) with dark theme
+- Pinned/sticky posts with 📌 toggle for admins, always sort to top
+- Welcome message automation — configurable message sent as notification on join
+
+Where we left off:
+- Resend API key still needs configuring for live emails
+- Next QOL features to consider: email digest, custom categories management, member roles/badges, invite codes, announcement banner
+- From the audit: avatar uploads, moderation tools, Stripe billing, PostgreSQL migration
