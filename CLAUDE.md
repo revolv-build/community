@@ -272,8 +272,18 @@ Also built:
 - Cleaned up 5 orphaned templates and test data
 - Footer with Terms/Privacy/Support links and placeholder legal pages
 
+Also built:
+- Job board with filters, featured listings, salary display, company logos, posting flow
+- 7 new Lander row types (16 total): Logo Wall, Pricing Table, Who Is This For, Founder Bio, Content Preview, Events Teaser, Video Hero
+- Responsive fixed-width styles for public site
+- Onboarding checklist on feed (complete profile, post, comment, RSVP) with progress bar
+- Draft posts with Save as Draft button, drafts page, publish action
+- Loading skeleton shimmer animation for lightbox
+- Seeded 8 realistic job listings
+
 Where we left off:
 - Resend API key still needs configuring for live emails
-- Next QOL features to consider: email digest, custom categories management, member roles/badges, invite codes
-- From the audit: moderation tools, Stripe billing, PostgreSQL migration
-- Admin login changed to haydn@revolv.uk
+- Admin login: haydn@revolv.uk
+- Next priorities: email digest, invite codes, moderation tools, custom categories admin, member roles/badges
+- Longer term: Stripe billing, PostgreSQL migration, Slack/Discord webhooks, OAuth login
+- app.py is now ~3,200 lines — should consider splitting into blueprints soon
