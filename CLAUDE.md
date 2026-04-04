@@ -253,7 +253,16 @@ Built:
 - Pinned/sticky posts with 📌 toggle for admins, always sort to top
 - Welcome message automation — configurable message sent as notification on join
 
+Also built:
+- Toggleable content channels: Blog, Podcasts, News, Newsletter with listing + detail + sidebar
+- Notification bell with unread count badge in sidebar
+- Relative timestamps everywhere (|timeago filter + JS timeago)
+- Announcement banner system (configurable, dismissible, purple gradient)
+- @mentions in comments with notifications
+- Favicon (SVG) and OG meta tags on all pages
+- Seeded 8 content entries across all channels
+
 Where we left off:
 - Resend API key still needs configuring for live emails
-- Next QOL features to consider: email digest, custom categories management, member roles/badges, invite codes, announcement banner
+- Next QOL features to consider: email digest, custom categories management, member roles/badges, invite codes
 - From the audit: avatar uploads, moderation tools, Stripe billing, PostgreSQL migration
