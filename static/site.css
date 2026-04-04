@@ -1,5 +1,6 @@
 /* ── Public Site Styles ────────────────────────────────────────── */
 .site-body { background: #0a0a0a; }
+.site-body * { box-sizing: border-box; }
 
 .site-nav { display: flex; justify-content: space-between; align-items: center; padding: 0 40px; height: 56px; border-bottom: 1px solid #1a1a1a; background: #0a0a0a; position: sticky; top: 0; z-index: 100; }
 .site-nav-logo { font-size: 16px; font-weight: 600; color: #fff; }
@@ -15,7 +16,7 @@
 .site-hero-btn { padding: 14px 36px !important; font-size: 15px !important; border-radius: 4px !important; }
 
 /* Sections */
-.site-section { padding: 64px 40px; }
+.site-section { padding: 64px 24px; }
 .site-container { max-width: 960px; margin: 0 auto; }
 .site-heading { font-size: 28px; font-weight: 700; color: #fff; text-align: center; margin-bottom: 32px; letter-spacing: -.02em; }
 .site-text { font-size: 16px; color: #aaa; line-height: 1.7; text-align: center; max-width: 640px; margin: 0 auto; white-space: pre-wrap; }
@@ -62,6 +63,87 @@
 .site-empty { text-align: center; padding: 120px 40px; }
 .site-empty h1 { font-size: 36px; color: #fff; margin-bottom: 12px; }
 .site-empty p { font-size: 16px; color: #888; margin-bottom: 32px; }
+
+/* ── Logo Wall */
+.site-logos-heading { font-size: 13px; color: #555; text-align: center; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px; }
+.site-logos-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; align-items: center; }
+.site-logo-item { background: #111; border: 1px solid #1e1e1e; border-radius: 6px; padding: 12px 24px; min-width: 100px; text-align: center; }
+.site-logo-item img { max-height: 28px; max-width: 100px; filter: grayscale(1) brightness(1.5); opacity: 0.6; transition: all .2s; }
+.site-logo-item img:hover { filter: none; opacity: 1; }
+.site-logo-item span { font-size: 14px; font-weight: 600; color: #666; }
+
+/* ── Pricing */
+.site-pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 700px; margin: 0 auto; }
+.site-pricing-card { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 32px; text-align: center; }
+.site-pricing-highlight { border-color: #5adb8a; background: #0a1a10; position: relative; }
+.site-pricing-highlight::before { content: 'Most Popular'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: #5adb8a; color: #000; font-size: 10px; font-weight: 700; padding: 2px 12px; border-radius: 10px; text-transform: uppercase; letter-spacing: .5px; }
+.site-pricing-name { font-size: 18px; font-weight: 600; color: #fff; margin-bottom: 8px; }
+.site-pricing-amount { font-size: 48px; font-weight: 800; color: #fff; letter-spacing: -.03em; }
+.site-pricing-period { font-size: 14px; color: #555; margin-left: 4px; }
+.site-pricing-price { margin-bottom: 24px; }
+.site-pricing-features { list-style: none; padding: 0; margin: 0 0 24px; text-align: left; }
+.site-pricing-features li { padding: 8px 0; font-size: 14px; color: #999; border-bottom: 1px solid #1a1a1a; }
+.site-pricing-features li::before { content: '✓ '; color: #5adb8a; font-weight: 600; }
+.site-pricing-features li:last-child { border-bottom: none; }
+.site-pricing-btn { width: 100%; justify-content: center; padding: 12px !important; font-size: 14px !important; }
+
+/* ── Personas / Who Is This For */
+.site-personas-list { display: flex; flex-direction: column; gap: 12px; }
+.site-persona { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; font-size: 16px; color: #ccc; }
+.site-persona-icon { font-size: 18px; color: #5adb8a; flex-shrink: 0; }
+
+/* ── Founder Bio */
+.site-founder { display: flex; gap: 24px; align-items: flex-start; background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 32px; }
+.site-founder-photo { width: 100px; height: 100px; border-radius: 50%; overflow: hidden; background: #1a1a2a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 2px solid #2a2a4a; }
+.site-founder-photo img { width: 100%; height: 100%; object-fit: cover; }
+.site-founder-photo span { font-size: 36px; font-weight: 700; color: #7070e0; }
+.site-founder-name { font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+.site-founder-title { font-size: 14px; color: #666; margin-bottom: 12px; }
+.site-founder-bio { font-size: 15px; color: #999; line-height: 1.6; margin-bottom: 12px; }
+.site-founder-socials { display: flex; gap: 12px; }
+.site-founder-socials a { font-size: 13px; color: #7070e0; }
+.site-founder-socials a:hover { color: #9090ff; }
+
+/* ── Community Preview */
+.site-preview-frame { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 8px; overflow: hidden; display: inline-block; }
+.site-preview-frame img { max-width: 100%; border-radius: 4px; display: block; }
+
+/* ── Events Teaser */
+.site-events-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.site-event-card { background: #111; border: 1px solid #1e1e1e; border-radius: 6px; padding: 24px; text-align: center; transition: border-color .15s; }
+.site-event-card:hover { border-color: #333; }
+.site-event-type { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #7070e0; margin-bottom: 8px; }
+.site-event-card h3 { font-size: 16px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+.site-event-date { font-size: 13px; color: #666; }
+
+/* ── Video Hero */
+.site-video-embed { max-width: 640px; margin: 24px auto 0; }
+
+/* ── Responsive */
+@media (max-width: 768px) {
+  .site-hero { padding: 60px 20px 40px; }
+  .site-hero-title { font-size: 32px; }
+  .site-hero-sub { font-size: 15px; }
+  .site-section { padding: 40px 16px; }
+  .site-features-grid { grid-template-columns: 1fr; }
+  .site-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .site-pricing-grid { grid-template-columns: 1fr; }
+  .site-events-grid { grid-template-columns: 1fr; }
+  .site-founder { flex-direction: column; align-items: center; text-align: center; }
+  .site-founder-socials { justify-content: center; }
+  .site-logos-grid { gap: 10px; }
+  .site-logo-item { padding: 8px 16px; min-width: 80px; }
+  .site-nav { padding: 0 16px; }
+  .site-testimonial { padding: 20px; }
+  .site-faq-item summary { font-size: 14px; padding: 12px 16px; }
+}
+
+@media (max-width: 480px) {
+  .site-hero-title { font-size: 26px; }
+  .site-pricing-amount { font-size: 36px; }
+  .site-founder-photo { width: 72px; height: 72px; }
+  .site-persona { font-size: 14px; padding: 10px 14px; }
+}
 
 /* Footer */
 .site-footer { text-align: center; padding: 32px; border-top: 1px solid #1a1a1a; font-size: 12px; color: #444; }

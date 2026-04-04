@@ -94,6 +94,68 @@
         </div>
         <span>Spacer</span>
       </div>
+
+      <div class="palette-item" draggable="true" data-type="logos">
+        <div class="palette-sil palette-sil-features" style="gap:6px;">
+          <div class="sil-col" style="height:16px;border-radius:2px;"></div>
+          <div class="sil-col" style="height:16px;border-radius:2px;"></div>
+          <div class="sil-col" style="height:16px;border-radius:2px;"></div>
+          <div class="sil-col" style="height:16px;border-radius:2px;"></div>
+        </div>
+        <span>Logo Wall</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="pricing">
+        <div class="palette-sil" style="display:flex;gap:4px;align-items:center;justify-content:center;">
+          <div class="sil-col" style="height:30px;width:40%;"></div>
+          <div class="sil-col" style="height:34px;width:40%;border-color:#5adb8a;"></div>
+        </div>
+        <span>Pricing</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="personas">
+        <div class="palette-sil palette-sil-faq">
+          <div class="sil-bar sil-bar-md" style="background:#1a5a30;"></div>
+          <div class="sil-bar sil-bar-md" style="background:#1a5a30;"></div>
+          <div class="sil-bar sil-bar-md" style="background:#1a5a30;"></div>
+        </div>
+        <span>Who It's For</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="founder">
+        <div class="palette-sil" style="display:flex;gap:6px;align-items:center;justify-content:center;">
+          <div class="sil-circle"></div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <div class="sil-bar sil-bar-md" style="width:50px;"></div>
+            <div class="sil-bar sil-bar-sm" style="width:35px;"></div>
+          </div>
+        </div>
+        <span>Founder Bio</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="preview">
+        <div class="palette-sil palette-sil-image">
+          <div class="sil-img-placeholder" style="border-color:#2a2a4a;"></div>
+        </div>
+        <span>Preview</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="events_teaser">
+        <div class="palette-sil palette-sil-features">
+          <div class="sil-col" style="height:24px;"></div>
+          <div class="sil-col" style="height:24px;"></div>
+          <div class="sil-col" style="height:24px;"></div>
+        </div>
+        <span>Events</span>
+      </div>
+
+      <div class="palette-item" draggable="true" data-type="video_hero">
+        <div class="palette-sil palette-sil-hero">
+          <div class="sil-bar sil-bar-lg"></div>
+          <div class="sil-img-placeholder" style="width:60%;height:16px;"></div>
+        </div>
+        <span>Video Hero</span>
+      </div>
     </div>
 
     <!-- Canvas -->
@@ -118,7 +180,14 @@ var DEFAULTS = {
   stats: {items:[{value:'500+',label:'Members'},{value:'1,200',label:'Posts'},{value:'50+',label:'Events'},{value:'98%',label:'Satisfaction'}]},
   faq: {heading:'FAQ', items:[{q:'Who is this community for?',a:'Anyone interested in the topic who wants to learn and connect with others.'},{q:'Is it free?',a:'Yes! Join and start participating immediately.'},{q:'How do I get involved?',a:'Sign up, introduce yourself, and start posting.'}]},
   image: {url:'', caption:''},
-  spacer: {height:48}
+  spacer: {height:48},
+  logos: {heading:'Trusted by teams at', logos:[{name:'Ahrefs',url:''},{name:'Gong',url:''},{name:'HubSpot',url:''},{name:'Notion',url:''},{name:'Webflow',url:''}]},
+  pricing: {heading:'Membership', plans:[{name:'Free',price:'0',period:'/month',features:['Access to discussions','Member directory','Community events'],btn_text:'Join Free',btn_url:'/join/'+SLUG,highlight:false},{name:'Pro',price:'29',period:'/month',features:['Everything in Free','Job board access','Exclusive resources','Private channels','Priority support'],btn_text:'Go Pro',btn_url:'/join/'+SLUG,highlight:true}]},
+  personas: {heading:'Who is this for?',items:[{icon:'✓',label:'Content Marketers looking to level up'},{icon:'✓',label:'Marketing Leaders building teams'},{icon:'✓',label:'Founders doing their own marketing'},{icon:'✓',label:'Agency owners serving B2B clients'}]},
+  founder: {name:'Founder Name',title:'CEO & Founder',photo:'',bio:'A short bio about the person behind this community. What makes them credible? What is their story?',twitter:'',linkedin:''},
+  preview: {heading:'See what is inside',image:'',caption:'A look inside the community platform'},
+  events_teaser: {heading:'Upcoming Events',events:[{title:'Monthly Workshop',date:'Every 2nd Thursday',type:'Workshop'},{title:'Expert AMA',date:'Monthly',type:'AMA'},{title:'Networking Mixer',date:'Quarterly',type:'Social'}]},
+  video_hero: {title:'See what we are about',subtitle:'Watch the intro video','video_url':'https://www.youtube.com/watch?v=dQw4w9WgXcQ',btn_text:'Join Now',btn_url:'/join/'+SLUG}
 };
 
 var canvas = document.getElementById('canvas');
@@ -172,6 +241,35 @@ function renderRow(row) {
       break;
     case 'spacer':
       preview = '<div class="rp rp-spacer"><span style="color:#333">— Spacer (' + (d.height||48) + 'px) —</span></div>';
+      break;
+    case 'logos':
+      preview = '<div class="rp rp-text"><div class="rp-heading">' + esc(d.heading) + '</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      (d.logos||[]).forEach(function(l) { preview += '<span style="background:#1a1a1a;padding:3px 10px;border-radius:2px;font-size:11px;color:#888;">' + esc(l.name) + '</span>'; });
+      preview += '</div></div>';
+      break;
+    case 'pricing':
+      preview = '<div class="rp rp-stats"><div class="rp-heading">' + esc(d.heading) + '</div><div class="rp-stat-grid">';
+      (d.plans||[]).forEach(function(p) { preview += '<div class="rp-stat" style="' + (p.highlight ? 'border:1px solid #5adb8a;border-radius:4px;padding:6px;' : '') + '"><div class="rp-stat-val">' + esc(p.price) + '</div><div class="rp-stat-lbl">' + esc(p.name) + '</div></div>'; });
+      preview += '</div></div>';
+      break;
+    case 'personas':
+      preview = '<div class="rp rp-text"><div class="rp-heading">' + esc(d.heading) + '</div>';
+      (d.items||[]).forEach(function(p) { preview += '<div style="font-size:11px;color:#5adb8a;margin-bottom:2px;">' + esc(p.icon) + ' ' + esc(p.label) + '</div>'; });
+      preview += '</div>';
+      break;
+    case 'founder':
+      preview = '<div class="rp" style="display:flex;gap:10px;align-items:center;padding:12px 16px;"><div class="sil-circle" style="width:32px;height:32px;flex-shrink:0;"></div><div><strong style="color:#eee;font-size:12px;">' + esc(d.name) + '</strong><div style="font-size:10px;color:#666;">' + esc(d.title) + '</div></div></div>';
+      break;
+    case 'preview':
+      preview = '<div class="rp rp-image"><div class="rp-heading">' + esc(d.heading) + '</div>' + (d.image ? '<img src="'+esc(d.image)+'" style="max-width:100%;max-height:60px;border-radius:4px;">' : '<span style="color:#444;font-size:11px;">Add a screenshot URL</span>') + '</div>';
+      break;
+    case 'events_teaser':
+      preview = '<div class="rp rp-features"><div class="rp-heading">' + esc(d.heading) + '</div><div class="rp-feat-grid">';
+      (d.events||[]).forEach(function(e) { preview += '<div class="rp-feat"><strong>' + esc(e.title) + '</strong><br><span style="font-size:10px;color:#555;">' + esc(e.date) + '</span></div>'; });
+      preview += '</div></div>';
+      break;
+    case 'video_hero':
+      preview = '<div class="rp rp-hero" style="background:#0c0c14;"><div class="rp-hero-title">' + esc(d.title) + '</div><div style="font-size:10px;color:#555;">▶ Video embed</div><div class="rp-hero-btn">' + esc(d.btn_text) + '</div></div>';
       break;
   }
 
@@ -294,6 +392,60 @@ function editRow(id) {
     case 'spacer':
       fhtml += field('height', 'Height (px)', d.height, 'number');
       break;
+    case 'logos':
+      fhtml += field('heading', 'Heading', d.heading);
+      (d.logos||[]).forEach(function(l, i) {
+        fhtml += '<div class="edit-group"><div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;"><input data-field="logos.' + i + '.name" value="' + esc(l.name) + '" placeholder="Company name"><input data-field="logos.' + i + '.url" value="' + esc(l.url||'') + '" placeholder="Logo URL (optional)"></div></div>';
+      });
+      break;
+    case 'pricing':
+      fhtml += field('heading', 'Heading', d.heading);
+      (d.plans||[]).forEach(function(p, i) {
+        fhtml += '<div class="edit-group" style="border:1px solid #1e1e1e;padding:12px;border-radius:4px;margin-bottom:8px;"><div class="label">Plan ' + (i+1) + '</div>';
+        fhtml += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">';
+        fhtml += '<input data-field="plans.' + i + '.name" value="' + esc(p.name) + '" placeholder="Plan name">';
+        fhtml += '<input data-field="plans.' + i + '.price" value="' + esc(p.price) + '" placeholder="Price">';
+        fhtml += '<input data-field="plans.' + i + '.period" value="' + esc(p.period) + '" placeholder="/month">';
+        fhtml += '</div>';
+        fhtml += '<input data-field="plans.' + i + '.btn_text" value="' + esc(p.btn_text) + '" placeholder="Button text" style="margin-bottom:6px;">';
+        fhtml += '<input data-field="plans.' + i + '.btn_url" value="' + esc(p.btn_url) + '" placeholder="Button URL" style="margin-bottom:6px;">';
+        fhtml += '<textarea data-field="plans.' + i + '.features" style="min-height:60px;" placeholder="One feature per line">' + (p.features||[]).join('\\n') + '</textarea>';
+        fhtml += '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#888;margin-top:6px;"><input type="checkbox" data-field="plans.' + i + '.highlight" ' + (p.highlight ? 'checked' : '') + ' style="width:auto;"> Highlight this plan</label>';
+        fhtml += '</div>';
+      });
+      break;
+    case 'personas':
+      fhtml += field('heading', 'Heading', d.heading);
+      (d.items||[]).forEach(function(p, i) {
+        fhtml += '<div class="edit-group"><div style="display:grid;grid-template-columns:40px 1fr;gap:8px;"><input data-field="items.' + i + '.icon" value="' + esc(p.icon) + '" placeholder="Icon"><input data-field="items.' + i + '.label" value="' + esc(p.label) + '" placeholder="Description"></div></div>';
+      });
+      break;
+    case 'founder':
+      fhtml += field('name', 'Name', d.name);
+      fhtml += field('title', 'Title / Role', d.title);
+      fhtml += field('photo', 'Photo URL', d.photo);
+      fhtml += area('bio', 'Bio', d.bio);
+      fhtml += field('twitter', 'Twitter URL', d.twitter);
+      fhtml += field('linkedin', 'LinkedIn URL', d.linkedin);
+      break;
+    case 'preview':
+      fhtml += field('heading', 'Heading', d.heading);
+      fhtml += field('image', 'Screenshot URL', d.image);
+      fhtml += field('caption', 'Caption', d.caption);
+      break;
+    case 'events_teaser':
+      fhtml += field('heading', 'Heading', d.heading);
+      (d.events||[]).forEach(function(e, i) {
+        fhtml += '<div class="edit-group"><div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;"><input data-field="events.' + i + '.title" value="' + esc(e.title) + '" placeholder="Event title"><input data-field="events.' + i + '.date" value="' + esc(e.date) + '" placeholder="When"><input data-field="events.' + i + '.type" value="' + esc(e.type) + '" placeholder="Type"></div></div>';
+      });
+      break;
+    case 'video_hero':
+      fhtml += field('title', 'Title', d.title);
+      fhtml += field('subtitle', 'Subtitle', d.subtitle);
+      fhtml += field('video_url', 'Video URL (YouTube/Vimeo)', d.video_url);
+      fhtml += field('btn_text', 'Button Text', d.btn_text);
+      fhtml += field('btn_url', 'Button URL', d.btn_url);
+      break;
   }
   fields.innerHTML = fhtml;
 }
@@ -315,10 +467,18 @@ function saveEdit() {
     var obj = row.data;
     for (var i = 0; i < path.length - 1; i++) {
       var key = isNaN(path[i]) ? path[i] : parseInt(path[i]);
+      if (!obj[key]) obj[key] = {};
       obj = obj[key];
     }
     var lastKey = isNaN(path[path.length-1]) ? path[path.length-1] : parseInt(path[path.length-1]);
-    obj[lastKey] = input.value;
+    // Handle special field types
+    if (input.type === 'checkbox') {
+      obj[lastKey] = input.checked;
+    } else if (lastKey === 'features' && input.tagName === 'TEXTAREA') {
+      obj[lastKey] = input.value.split('\n').filter(function(l) { return l.trim(); });
+    } else {
+      obj[lastKey] = input.value;
+    }
   });
   closeEdit();
   renderCanvas();

@@ -127,6 +127,136 @@
 
   {% elif row.type == 'spacer' %}
   <div style="height:{{ d.height or 48 }}px;"></div>
+
+  {% elif row.type == 'logos' %}
+  <section class="site-section">
+    <div class="site-container">
+      {% if d.heading %}<p class="site-logos-heading">{{ d.heading }}</p>{% endif %}
+      <div class="site-logos-grid">
+        {% for l in d.logos %}
+        <div class="site-logo-item">
+          {% if l.url %}<img src="{{ l.url }}" alt="{{ l.name }}" />{% else %}<span>{{ l.name }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'pricing' %}
+  <section class="site-section">
+    <div class="site-container">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      <div class="site-pricing-grid">
+        {% for plan in d.plans %}
+        <div class="site-pricing-card {{ 'site-pricing-highlight' if plan.highlight else '' }}">
+          <div class="site-pricing-name">{{ plan.name }}</div>
+          <div class="site-pricing-price">
+            <span class="site-pricing-amount">{{ plan.currency if plan.currency is defined else '$' }}{{ plan.price }}</span>
+            <span class="site-pricing-period">{{ plan.period }}</span>
+          </div>
+          <ul class="site-pricing-features">
+            {% for f in plan.features %}
+            <li>{{ f }}</li>
+            {% endfor %}
+          </ul>
+          {% if plan.btn_text %}
+          <a href="{{ plan.btn_url or '#' }}" class="btn {{ 'btn-primary' if plan.highlight else 'btn-ghost' }} site-pricing-btn">{{ plan.btn_text }}</a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'personas' %}
+  <section class="site-section">
+    <div class="site-container" style="max-width:700px;">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      <div class="site-personas-list">
+        {% for p in d['items'] %}
+        <div class="site-persona">
+          <span class="site-persona-icon">{{ p.icon }}</span>
+          <span>{{ p.label }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'founder' %}
+  <section class="site-section">
+    <div class="site-container" style="max-width:640px;">
+      <div class="site-founder">
+        <div class="site-founder-photo">
+          {% if d.photo %}<img src="{{ d.photo }}" alt="{{ d.name }}" />{% else %}<span>{{ d.name[0] | upper }}</span>{% endif %}
+        </div>
+        <div class="site-founder-info">
+          <h3 class="site-founder-name">{{ d.name }}</h3>
+          <div class="site-founder-title">{{ d.title }}</div>
+          {% if d.bio %}<p class="site-founder-bio">{{ d.bio }}</p>{% endif %}
+          <div class="site-founder-socials">
+            {% if d.twitter %}<a href="{{ d.twitter }}" target="_blank" rel="noopener">Twitter</a>{% endif %}
+            {% if d.linkedin %}<a href="{{ d.linkedin }}" target="_blank" rel="noopener">LinkedIn</a>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'preview' %}
+  <section class="site-section">
+    <div class="site-container" style="text-align:center;">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      {% if d.image %}
+      <div class="site-preview-frame">
+        <img src="{{ d.image }}" alt="{{ d.caption }}" />
+      </div>
+      {% endif %}
+      {% if d.caption %}<p class="site-image-caption">{{ d.caption }}</p>{% endif %}
+    </div>
+  </section>
+
+  {% elif row.type == 'events_teaser' %}
+  <section class="site-section">
+    <div class="site-container">
+      {% if d.heading %}<h2 class="site-heading">{{ d.heading }}</h2>{% endif %}
+      <div class="site-events-grid">
+        {% for e in d.events %}
+        <div class="site-event-card">
+          <div class="site-event-type">{{ e.type }}</div>
+          <h3>{{ e.title }}</h3>
+          <div class="site-event-date">{{ e.date }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {% elif row.type == 'video_hero' %}
+  <section class="site-hero" style="background:#0c0c14;">
+    <div class="site-hero-inner">
+      <h1 class="site-hero-title">{{ d.title }}</h1>
+      {% if d.subtitle %}<p class="site-hero-sub">{{ d.subtitle }}</p>{% endif %}
+      {% if d.video_url %}
+      <div class="site-video-embed">
+        <div class="video-embed">
+          {% set vid_url = d.video_url %}
+          {% if 'youtube.com/watch' in vid_url %}
+          <iframe src="https://www.youtube.com/embed/{{ vid_url.split('v=')[1].split('&')[0] }}" frameborder="0" allowfullscreen></iframe>
+          {% elif 'youtu.be/' in vid_url %}
+          <iframe src="https://www.youtube.com/embed/{{ vid_url.split('youtu.be/')[1].split('?')[0] }}" frameborder="0" allowfullscreen></iframe>
+          {% elif 'vimeo.com/' in vid_url %}
+          <iframe src="https://player.vimeo.com/video/{{ vid_url.split('/')[-1] }}" frameborder="0" allowfullscreen></iframe>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+      {% if d.btn_text %}
+      <a href="{{ d.btn_url or '#' }}" class="btn btn-primary site-hero-btn" style="margin-top:24px;">{{ d.btn_text }}</a>
+      {% endif %}
+    </div>
+  </section>
+
   {% endif %}
 
   {% endfor %}
