@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Community{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
   {% if current_user and current_user.is_admin and not session.get('impersonator_id') %}
@@ -49,5 +50,6 @@
   {% endwith %}
 
   {% block content %}{% endblock %}
+  <script src="{{ url_for('static', filename='csrf.js') }}"></script>
 </body>
 </html>

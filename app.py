@@ -26,6 +26,10 @@ from flask import (
     Flask, render_template, request,
     redirect, url_for, session, flash, g, abort, send_from_directory
 )
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from markupsafe import escape
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -45,7 +49,19 @@ MAX_UPLOAD_MB = 50
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
+app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 7  # 7 days
+app.config["WTF_CSRF_TIME_LIMIT"] = 3600  # 1 hour CSRF token validity
 DEFAULT_PORT = int(os.environ.get("PORT", 5001))
+
+# CSRF protection
+csrf = CSRFProtect(app)
+
+# Rate limiting
+limiter = Limiter(get_remote_address, app=app, default_limits=["200 per minute"],
+                  storage_uri="memory://")
 
 (APP_DIR / "data").mkdir(exist_ok=True)
 
@@ -394,6 +410,7 @@ def landing():
     return render_template("landing.html")
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def login_page():
     if session.get("user_id"):
         return redirect("/dashboard")
@@ -408,6 +425,7 @@ def login_page():
     return render_template("login.html", err=err)
 
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per minute", methods=["POST"])
 def register_page():
     if session.get("user_id"):
         return redirect("/dashboard")
@@ -1946,6 +1964,7 @@ def community_lander(slug):
                            membership=g.membership, config=config)
 
 @app.route("/c/<slug>/lander/save", methods=["POST"])
+@csrf.exempt
 @community_admin_required
 def community_lander_save(slug):
     community = g.community
@@ -2234,6 +2253,20 @@ def screenshots_capture():
     except Exception as e:
         flash(f"Failed to start capture: {e}", "error")
     return redirect("/screenshots")
+
+# ── Error Handlers ────────────────────────────────────────────────
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template("errors/404.html"), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return render_template("errors/500.html"), 500
+
+@app.errorhandler(429)
+def rate_limited(e):
+    return render_template("errors/429.html"), 429
 
 # ── Boot ─────────────────────────────────────────────────────────
 

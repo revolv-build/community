@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Register - Community</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
 <div class="page-narrow">
@@ -27,5 +28,6 @@
     Already have an account? <a href="/login" style="color:#fff;">Sign in</a>
   </div>
 </div>
+<script src="{{ url_for('static', filename='csrf.js') }}"></script>
 </body>
 </html>
