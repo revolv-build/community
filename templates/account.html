@@ -5,6 +5,21 @@
   <h1>Account</h1>
   <div class="sub">Update your details</div>
 
+  <div class="card mb-16">
+    <h2>Profile Photo</h2>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+      {% if user.avatar_path %}
+      <img src="/uploads/{{ user.avatar_path }}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #2a2a4a;" />
+      {% else %}
+      <div class="profile-avatar" style="width:64px;height:64px;font-size:24px;">{{ user.name[0] | upper }}</div>
+      {% endif %}
+      <form method="POST" action="/account/avatar" enctype="multipart/form-data" style="flex:1;">
+        <input name="avatar" type="file" accept="image/jpeg,image/png,image/webp,image/gif" />
+        <div style="margin-top:8px;"><button class="btn btn-primary btn-sm">Upload Photo</button></div>
+      </form>
+    </div>
+  </div>
+
   <div class="card">
     <h2>Profile</h2>
     <form method="POST" action="/account/profile">

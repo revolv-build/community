@@ -111,6 +111,24 @@ def render_markdown(text):
 def markdown_filter(text):
     return render_markdown(text)
 
+def strip_markdown(text):
+    """Remove markdown syntax for plain text previews."""
+    if not text:
+        return ""
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+    t = re.sub(r'\*(.+?)\*', r'\1', t)          # *italic*
+    t = re.sub(r'__(.+?)__', r'\1', t)
+    t = re.sub(r'_(.+?)_', r'\1', t)
+    t = re.sub(r'#{1,6}\s*', '', t)              # headings
+    t = re.sub(r'^\s*[-*+]\s+', '', t, flags=re.MULTILINE)  # list items
+    t = re.sub(r'^\s*\d+\.\s+', '', t, flags=re.MULTILINE)  # numbered lists
+    t = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', t)  # [links](url)
+    t = re.sub(r'`{1,3}[^`]*`{1,3}', '', t)    # code
+    t = re.sub(r'^>\s*', '', t, flags=re.MULTILINE)  # blockquotes
+    t = re.sub(r'---+', '', t)                   # horizontal rules
+    t = re.sub(r'\n{2,}', ' ', t)                # collapse newlines
+    return t.strip()
+
 @app.template_filter("timeago")
 def timeago_filter(dt_str):
     """Convert ISO datetime string to relative time like '3h ago'."""
@@ -468,9 +486,18 @@ def get_unread_notification_count(user_id, community_id):
         (user_id, community_id)
     ).fetchone()[0]
 
+def avatar_html(user, size=22):
+    """Generate avatar HTML — photo if available, initial letter if not."""
+    if user and user.get("avatar_path") if isinstance(user, dict) else (user and user["avatar_path"] if user else None):
+        path = user["avatar_path"] if not isinstance(user, dict) else user.get("avatar_path", "")
+        if path:
+            return Markup(f'<img src="/uploads/{path}" class="avatar-img" style="width:{size}px;height:{size}px;" />')
+    name = user["name"] if user else "?"
+    return Markup(f'<span class="qa-avatar" style="width:{size}px;height:{size}px;font-size:{max(10, size//2)}px;">{name[0].upper()}</span>')
+
 @app.context_processor
 def inject_globals():
-    return dict(current_user=current_user())
+    return dict(current_user=current_user(), avatar_html=avatar_html)
 
 # ── Auth decorators ───────────────────────────────────────────────
 
@@ -864,6 +891,28 @@ def account_password():
     flash("Password updated.", "success")
     return redirect("/account")
 
+@app.route("/account/avatar", methods=["POST"])
+@login_required
+def account_avatar():
+    file = request.files.get("avatar")
+    if not file or not file.filename:
+        flash("No file selected.", "error")
+        return redirect("/account")
+    ext = file.filename.rsplit(".", 1)[-1].lower()
+    if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+        flash("Please upload a JPG, PNG, or WebP image.", "error")
+        return redirect("/account")
+    avatar_dir = UPLOAD_DIR / "avatars"
+    avatar_dir.mkdir(exist_ok=True)
+    avatar_name = f"avatar_{session['user_id']}.{ext}"
+    file.save(str(avatar_dir / avatar_name))
+    db = get_db()
+    db.execute("UPDATE users SET avatar_path = ? WHERE id = ?",
+               (f"avatars/{avatar_name}", session["user_id"]))
+    db.commit()
+    flash("Profile photo updated!", "success")
+    return redirect("/account")
+
 # ══════════════════════════════════════════════════════════════════
 #  COMMUNITY-SCOPED ROUTES — /c/<slug>/...
 # ══════════════════════════════════════════════════════════════════
@@ -939,7 +988,8 @@ def community_feed(slug):
     for p in posts:
         d = dict(p)
         body = d.get("body") or ""
-        d["preview"] = body[:200] + ("..." if len(body) > 200 else "")
+        plain = strip_markdown(body)
+        d["preview"] = plain[:200] + ("..." if len(plain) > 200 else "")
         d["my_vote"] = my_votes.get(p["id"], 0)
         d["is_bookmarked"] = p["id"] in my_bookmarks
         d["is_following"] = p["id"] in my_follows
@@ -2904,6 +2954,18 @@ def screenshots_capture():
     except Exception as e:
         flash(f"Failed to start capture: {e}", "error")
     return redirect("/screenshots")
+
+# ── Legal Pages ──────────────────────────────────────────────────
+
+@app.route("/terms")
+def terms_page():
+    return render_template("legal.html", title="Terms of Service",
+                           content="These terms of service govern your use of the Community platform. By using this platform, you agree to these terms. This is a placeholder — full terms will be published before public launch.")
+
+@app.route("/privacy")
+def privacy_page():
+    return render_template("legal.html", title="Privacy Policy",
+                           content="We collect your name, email, and content you post. We do not sell your data to third parties. Cookies are used for session management only. This is a placeholder — a full privacy policy will be published before public launch.")
 
 # ── Error Handlers ────────────────────────────────────────────────
 

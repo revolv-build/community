@@ -862,6 +862,25 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 
 /* ── @mention highlight ───────────────────────────────────────── */
 
+/* ── Toast Notifications ──────────────────────────────────────── */
+.toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+.toast { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 4px; font-size: 13px; transform: translateX(120%); transition: transform .3s ease; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+.toast-show { transform: translateX(0); }
+.toast-success { background: #0d2a1a; border: 1px solid #1a5a30; color: #5adb8a; }
+.toast-error { background: #2a0d0d; border: 1px solid #5a2020; color: #e05050; }
+.toast-text { flex: 1; }
+.toast-close { background: none; border: none; color: inherit; font-size: 16px; cursor: pointer; opacity: 0.6; padding: 0 4px; }
+.toast-close:hover { opacity: 1; }
+
+/* ── Platform Footer ──────────────────────────────────────────── */
+.platform-footer { text-align: center; padding: 24px; border-top: 1px solid #1a1a1a; font-size: 11px; color: #444; margin-top: 48px; }
+.platform-footer a { color: #555; transition: color .12s; }
+.platform-footer a:hover { color: #ccc; }
+.footer-sep { margin: 0 6px; }
+
+/* ── Avatar Image ─────────────────────────────────────────────── */
+.avatar-img { border-radius: 50%; object-fit: cover; border: 1px solid #2a2a4a; flex-shrink: 0; }
+
 /* ── Verify Banner ────────────────────────────────────────────── */
 .verify-banner { background: #1a1400; border: 1px solid #3a3000; border-radius: 2px; padding: 12px 16px; font-size: 13px; color: #c0a040; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 

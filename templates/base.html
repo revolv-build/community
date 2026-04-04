@@ -60,6 +60,16 @@
   {% endwith %}
 
   {% block content %}{% endblock %}
+  <footer class="platform-footer">
+    <span>Powered by Community</span>
+    <span class="footer-sep">&middot;</span>
+    <a href="/terms">Terms</a>
+    <span class="footer-sep">&middot;</span>
+    <a href="/privacy">Privacy</a>
+    <span class="footer-sep">&middot;</span>
+    <a href="mailto:haydn@revolv.uk">Support</a>
+  </footer>
   <script src="{{ url_for('static', filename='csrf.js') }}"></script>
+  <script src="{{ url_for('static', filename='toast.js') }}"></script>
 </body>
 </html>
