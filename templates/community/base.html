@@ -113,6 +113,9 @@
         <a href="/c/{{ community.slug }}/bookmarks" class="sidebar-link {% if '/bookmarks' in request.path %}active{% endif %}">
           <span class="sidebar-icon">&#9734;</span> Bookmarks
         </a>
+        <a href="/c/{{ community.slug }}/drafts" class="sidebar-link {% if '/drafts' in request.path %}active{% endif %}">
+          <span class="sidebar-icon">&#9998;</span> Drafts
+        </a>
         <a href="/c/{{ community.slug }}/notifications" class="sidebar-link {% if '/notifications' in request.path %}active{% endif %}">
           <span class="sidebar-icon">&#9670;</span> Notifications
           {% if g.notif_count is defined and g.notif_count > 0 %}

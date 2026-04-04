@@ -26,6 +26,9 @@
       </div>
       <div class="flex gap-8">
         <button class="btn btn-primary">{{ 'Update' if post else 'Publish' }}</button>
+        {% if not post %}
+        <button name="save_draft" value="1" class="btn btn-ghost">Save as Draft</button>
+        {% endif %}
         <a href="/c/{{ community.slug }}/{{ 'posts/' ~ post.id if post else '' }}" class="btn btn-ghost">Cancel</a>
       </div>
     </form>

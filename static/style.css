@@ -526,6 +526,23 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 .lb-close:hover { color: #fff; }
 .lb-body { padding: 0 0 8px; clear: both; }
 .lb-loading { text-align: center; padding: 60px 24px; color: #555; font-size: 13px; }
+
+/* Loading skeleton */
+.lb-skeleton { padding: 0; }
+.lb-skel-row { display: flex; gap: 0; padding: 0; }
+.lb-skel-votes { width: 48px; padding: 20px 10px; display: flex; justify-content: center; }
+.lb-skel-content { flex: 1; padding: 20px; }
+.lb-skel-comments { border-top: 1px solid #1a1a1a; }
+.skel-block { background: #1a1a1a; border-radius: 4px; }
+.skel-line { height: 12px; background: #1a1a1a; border-radius: 4px; margin-bottom: 8px; animation: shimmer 1.5s ease-in-out infinite; }
+.skel-w30 { width: 30%; }
+.skel-w40 { width: 40%; }
+.skel-w60 { width: 60%; }
+.skel-w70 { width: 70%; }
+.skel-w80 { width: 80%; }
+.skel-w90 { width: 90%; }
+.skel-w100 { width: 100%; }
+@keyframes shimmer { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
 .lb-post { }
 .lb-post .qa-card { border-left: none; border-right: none; border-top: none; border-radius: 0; }
 .lb-post .qa-content { padding: 14px 20px 14px 14px; }
@@ -915,6 +932,26 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 .toast-text { flex: 1; }
 .toast-close { background: none; border: none; color: inherit; font-size: 16px; cursor: pointer; opacity: 0.6; padding: 0 4px; }
 .toast-close:hover { opacity: 1; }
+
+/* ── Onboarding Checklist ──────────────────────────────────────── */
+.onboard-card { background: linear-gradient(135deg, #0a1a20 0%, #0a0a14 100%); border: 1px solid #1a2a3a; border-radius: 4px; padding: 18px 20px; }
+.onboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 16px; }
+.onboard-title { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+.onboard-progress-text { font-size: 11px; color: #4090e0; }
+.onboard-progress-bar { width: 120px; height: 6px; background: #1a1a2a; border-radius: 3px; overflow: hidden; }
+.onboard-progress-fill { height: 100%; background: linear-gradient(90deg, #4090e0, #5adb8a); border-radius: 3px; transition: width .3s; }
+.onboard-items { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px; }
+.onboard-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid #1a1a2a; border-radius: 4px; font-size: 13px; color: #999; transition: all .12s; }
+.onboard-item:hover { border-color: #2a2a4a; color: #fff; background: rgba(255,255,255,0.05); }
+.onboard-done { opacity: 0.5; }
+.onboard-done .onboard-check { color: #5adb8a; }
+.onboard-check { font-size: 16px; flex-shrink: 0; width: 24px; text-align: center; }
+
+/* ── Draft Cards ──────────────────────────────────────────────── */
+.draft-card { display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #111; border: 1px solid #1e1e1e; border-left: 3px solid #c0a040; border-radius: 2px; padding: 14px 18px; margin-bottom: 8px; }
+.draft-title { font-size: 14px; font-weight: 600; color: #eee; margin-bottom: 2px; }
+.draft-meta { font-size: 11px; color: #555; }
+.draft-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
 /* ── Platform Footer ──────────────────────────────────────────── */
 .platform-footer { text-align: center; padding: 24px; border-top: 1px solid #1a1a1a; font-size: 11px; color: #444; margin-top: 48px; }

@@ -34,6 +34,29 @@
     </div>
   </div>
 
+  <!-- Onboarding Checklist -->
+  {% if onboarding %}
+  <div class="onboard-card mb-16">
+    <div class="onboard-header">
+      <div>
+        <div class="onboard-title">Get Started</div>
+        <div class="onboard-progress-text">{{ onboarding.completed }}/{{ onboarding.total }} completed</div>
+      </div>
+      <div class="onboard-progress-bar">
+        <div class="onboard-progress-fill" style="width:{{ onboarding.percent }}%;"></div>
+      </div>
+    </div>
+    <div class="onboard-items">
+      {% for item in onboarding.checklist %}
+      <a href="{{ item.url }}" class="onboard-item {{ 'onboard-done' if item.done else '' }}">
+        <span class="onboard-check">{{ '✓' if item.done else item.icon }}</span>
+        <span>{{ item.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Starter CTA (show only when no filters and few posts or for new members) -->
   {% if not search_q and not current_category %}
   <div class="starter-cta mb-16">

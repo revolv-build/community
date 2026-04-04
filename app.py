@@ -934,7 +934,7 @@ def community_feed(slug):
     elif sort == "discussed":
         order = "p.is_pinned DESC, comment_count DESC, p.created DESC"
 
-    where = "p.community_id = ?"
+    where = "p.community_id = ? AND p.is_draft = 0"
     params = [community["id"]]
     if category:
         where += " AND p.category = ?"
@@ -1001,10 +1001,37 @@ def community_feed(slug):
         "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (community["id"],)
     ).fetchone()[0]
     notif_count = get_unread_notification_count(session["user_id"], community["id"])
+
+    # Onboarding checklist
+    user = current_user()
+    onboarding = None
+    has_bio = bool(user["bio"])
+    has_post = db.execute("SELECT 1 FROM posts WHERE user_id = ? AND community_id = ? AND is_draft = 0 LIMIT 1",
+                          (session["user_id"], community["id"])).fetchone() is not None
+    has_rsvp = db.execute("""
+        SELECT 1 FROM rsvps r JOIN events e ON r.event_id = e.id
+        WHERE r.user_id = ? AND e.community_id = ? LIMIT 1
+    """, (session["user_id"], community["id"])).fetchone() is not None
+    has_comment = db.execute("""
+        SELECT 1 FROM comments c JOIN posts p ON c.post_id = p.id
+        WHERE c.user_id = ? AND p.community_id = ? LIMIT 1
+    """, (session["user_id"], community["id"])).fetchone() is not None
+    checklist = [
+        {"done": has_bio, "label": "Complete your profile", "url": "/account", "icon": "👤"},
+        {"done": has_post, "label": "Publish your first post", "url": f"/c/{slug}/posts/new", "icon": "✍️"},
+        {"done": has_comment, "label": "Comment on a discussion", "url": f"/c/{slug}/", "icon": "💬"},
+        {"done": has_rsvp, "label": "RSVP to an event", "url": f"/c/{slug}/events", "icon": "📅"},
+    ]
+    completed = sum(1 for c in checklist if c["done"])
+    if completed < len(checklist):
+        onboarding = {"checklist": checklist, "completed": completed, "total": len(checklist),
+                      "percent": int(completed / len(checklist) * 100)}
+
     return render_template("community/feed.html", community=community,
                            posts=posts_enriched, membership=g.membership,
                            member_count=member_count, sort=sort, notif_count=notif_count,
-                           categories=categories, current_category=category, search_q=q)
+                           categories=categories, current_category=category, search_q=q,
+                           onboarding=onboarding)
 
 # ── Community: Posts ─────────────────────────────────────────────
 
@@ -1017,15 +1044,19 @@ def community_new_post(slug):
         title = request.form.get("title", "").strip()
         body = request.form.get("body", "").strip()
         category = request.form.get("category", "").strip()
+        is_draft = 1 if request.form.get("save_draft") else 0
         if not title:
             flash("Title is required.", "error")
             return redirect(f"/c/{slug}/posts/new")
         now = datetime.utcnow().isoformat()
         cursor = db.execute(
-            "INSERT INTO posts (community_id, user_id, title, body, category, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (community["id"], session["user_id"], title, body, category, now, now)
+            "INSERT INTO posts (community_id, user_id, title, body, category, is_draft, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (community["id"], session["user_id"], title, body, category, is_draft, now, now)
         )
         db.commit()
+        if is_draft:
+            flash("Draft saved!", "success")
+            return redirect(f"/c/{slug}/drafts")
         return redirect(f"/c/{slug}/posts/{cursor.lastrowid}")
     # Get existing categories for autocomplete
     cats = db.execute(
@@ -3034,6 +3065,35 @@ def admin_stop_impersonating():
     return redirect("/dashboard")
 
 # ── Bookmarks & Notifications ────────────────────────────────────
+
+@app.route("/c/<slug>/drafts")
+@community_member_required
+def community_drafts(slug):
+    db = get_db()
+    community = g.community
+    drafts = db.execute("""
+        SELECT p.*, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+        FROM posts p WHERE p.community_id = ? AND p.user_id = ? AND p.is_draft = 1
+        ORDER BY p.updated DESC
+    """, (community["id"], session["user_id"])).fetchall()
+    return render_template("community/drafts.html", community=community,
+                           membership=g.membership, drafts=drafts)
+
+@app.route("/c/<slug>/posts/<int:pid>/publish", methods=["POST"])
+@community_member_required
+def community_publish_draft(slug, pid):
+    db = get_db()
+    community = g.community
+    post = db.execute("SELECT * FROM posts WHERE id = ? AND community_id = ? AND user_id = ?",
+                      (pid, community["id"], session["user_id"])).fetchone()
+    if not post or not post["is_draft"]:
+        flash("Not found.", "error")
+        return redirect(f"/c/{slug}/drafts")
+    now = datetime.utcnow().isoformat()
+    db.execute("UPDATE posts SET is_draft = 0, created = ?, updated = ? WHERE id = ?", (now, now, pid))
+    db.commit()
+    flash("Post published!", "success")
+    return redirect(f"/c/{slug}/posts/{pid}")
 
 @app.route("/c/<slug>/bookmarks")
 @community_member_required

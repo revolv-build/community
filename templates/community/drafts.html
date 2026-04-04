@@ -1,0 +1,31 @@
+{% extends "community/base.html" %}
+{% block title %}Drafts - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:700px;">
+  <h1>Your Drafts</h1>
+  <div class="sub">Unpublished posts you're working on</div>
+
+  {% if drafts %}
+    {% for d in drafts %}
+    <div class="draft-card">
+      <div class="draft-info">
+        {% if d.category %}<span class="qa-cat-badge">{{ d.category }}</span>{% endif %}
+        <div class="draft-title">{{ d.title }}</div>
+        <div class="draft-meta">Last edited {{ d.updated | timeago }}</div>
+      </div>
+      <div class="draft-actions">
+        <a href="/c/{{ community.slug }}/posts/{{ d.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
+        <form method="POST" action="/c/{{ community.slug }}/posts/{{ d.id }}/publish" style="display:inline;">
+          <button class="btn btn-primary btn-sm">Publish</button>
+        </form>
+        <form method="POST" action="/c/{{ community.slug }}/posts/{{ d.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this draft?')">
+          <button class="btn btn-danger btn-sm">Delete</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="qa-empty">No drafts. Create a post and save it as a draft to see it here.</div>
+  {% endif %}
+</div>
+{% endblock %}

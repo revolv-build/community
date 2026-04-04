@@ -189,7 +189,7 @@
 
   function openPost(postId) {
     previousUrl = window.location.href;
-    body.innerHTML = '<div class="lb-loading">Loading...</div>';
+    body.innerHTML = '<div class="lb-skeleton"><div class="lb-skel-row"><div class="lb-skel-votes"><div class="skel-block" style="width:28px;height:60px;"></div></div><div class="lb-skel-content"><div class="skel-line skel-w40"></div><div class="skel-line skel-w80" style="height:20px;margin:8px 0;"></div><div class="skel-line skel-w100"></div><div class="skel-line skel-w90"></div><div class="skel-line skel-w60"></div></div></div><div class="lb-skel-comments"><div class="skel-line skel-w30" style="margin:16px 20px;"></div><div style="padding:12px 20px;display:flex;gap:10px;"><div class="skel-block" style="width:24px;height:24px;border-radius:50%;"></div><div style="flex:1;"><div class="skel-line skel-w40"></div><div class="skel-line skel-w90"></div></div></div><div style="padding:12px 20px;display:flex;gap:10px;"><div class="skel-block" style="width:24px;height:24px;border-radius:50%;"></div><div style="flex:1;"><div class="skel-line skel-w30"></div><div class="skel-line skel-w70"></div></div></div></div></div>';
     overlay.classList.add('lb-open');
     document.body.style.overflow = 'hidden';
     history.pushState(null, '', base + '/posts/' + postId);
