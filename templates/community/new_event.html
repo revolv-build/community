@@ -1,5 +1,5 @@
 {% extends "community/base.html" %}
-{% block title %}{{ 'Edit Event' if event else 'New Event' }} - {{ community.name }}{% endblock %}
+{% block title %}{{ 'Edit Event' if event else 'Create Event' }} - {{ community.name }}{% endblock %}
 {% block content %}
 <div class="page-mid">
   <h1>{{ 'Edit Event' if event else 'Create Event' }}</h1>
@@ -9,12 +9,29 @@
     <form method="POST">
       <div class="field">
         <div class="label">Event Title</div>
-        <input name="title" value="{{ event.title if event else '' }}" placeholder="e.g. Weekly Standup, Workshop, Meetup" required autofocus />
+        <input name="title" value="{{ event.title if event else '' }}" placeholder="e.g. Weekly Standup, Content Workshop, AMA" required autofocus />
       </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field">
+          <div class="label">Event Type</div>
+          <select name="event_type">
+            {% for key, label in event_types.items() %}
+            <option value="{{ key }}" {{ 'selected' if event and event.event_type == key else '' }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <div class="label">Capacity (0 = unlimited)</div>
+          <input name="capacity" type="number" value="{{ event.capacity if event else 0 }}" min="0" />
+        </div>
+      </div>
+
       <div class="field">
         <div class="label">Description</div>
-        <textarea name="description" style="min-height:120px;" placeholder="What's this event about?">{{ event.description if event else '' }}</textarea>
+        <textarea name="description" class="md-editor" style="min-height:120px;" placeholder="What's this event about? (Markdown supported)">{{ event.description if event else '' }}</textarea>
       </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
         <div class="field">
           <div class="label">Date</div>
@@ -29,13 +46,14 @@
           <input name="end_time" type="time" value="{{ event.end_time if event else '' }}" />
         </div>
       </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
           <div class="label">Location</div>
           <input name="location" value="{{ event.location if event else '' }}" placeholder="e.g. Office, Zoom, London" />
         </div>
         <div class="field">
-          <div class="label">Type</div>
+          <div class="label">Format</div>
           <select name="location_type">
             <option value="in-person" {{ 'selected' if event and event.location_type == 'in-person' else '' }}>In Person</option>
             <option value="online" {{ 'selected' if event and event.location_type == 'online' else '' }}>Online</option>
@@ -43,10 +61,40 @@
           </select>
         </div>
       </div>
+
       <div class="field">
         <div class="label">Meeting Link (optional)</div>
         <input name="link" value="{{ event.link if event else '' }}" placeholder="https://zoom.us/..." />
       </div>
+
+      <div class="field">
+        <div class="label">Speakers (comma-separated member IDs)</div>
+        <input name="speakers" value="{{ event.speakers if event else '' }}" placeholder="e.g. 2, 3, 5" />
+        {% if members is defined and members %}
+        <div style="font-size:11px;color:#444;margin-top:4px;">
+          Members: {% for m in members %}{{ m.name }} ({{ m.id }}){{ ', ' if not loop.last else '' }}{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% if event %}
+      <div style="border-top:1px solid #1e1e1e;padding-top:16px;margin-top:8px;">
+        <h3 style="margin-bottom:12px;">Post-Event Content</h3>
+        <div class="field">
+          <div class="label">Recording URL</div>
+          <input name="recording_url" value="{{ event.recording_url or '' }}" placeholder="YouTube, Vimeo, or direct link" />
+        </div>
+        <div class="field">
+          <div class="label">Slides URL</div>
+          <input name="slides_url" value="{{ event.slides_url or '' }}" placeholder="Google Slides, PDF link, etc." />
+        </div>
+        <div class="field">
+          <div class="label">Event Notes</div>
+          <textarea name="notes" class="md-editor" style="min-height:100px;" placeholder="Key takeaways, summary, etc. (Markdown)">{{ event.notes or '' }}</textarea>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="flex gap-8">
         <button class="btn btn-primary">{{ 'Update Event' if event else 'Create Event' }}</button>
         <a href="/c/{{ community.slug }}/events{{ '/' ~ event.id if event else '' }}" class="btn btn-ghost">Cancel</a>

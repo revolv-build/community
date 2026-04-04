@@ -1,90 +1,208 @@
 {% extends "community/base.html" %}
 {% block title %}{{ event.title }} - {{ community.name }}{% endblock %}
 {% block content %}
-<div class="page-mid">
-  <div class="card mb-24">
-    <div class="flex-between mb-16">
-      <div>
-        <div class="event-detail-date">
-          {{ event.event_date }}
-          {% if event.event_time %} at {{ event.event_time }}{% endif %}
-          {% if event.end_time %} – {{ event.end_time }}{% endif %}
+<div class="page" style="max-width:1060px;">
+  <div style="margin-bottom:12px;">
+    <a href="/c/{{ community.slug }}/events" style="font-size:12px;color:#7070e0;">← Back to Events</a>
+  </div>
+
+  <div class="ch-layout">
+    <div class="ch-main">
+      <div class="card mb-16">
+        <div class="flex-between mb-12">
+          <div>
+            <span class="qa-cat-badge" style="margin-bottom:6px;">{{ event_types.get(event.event_type, 'Event') }}</span>
+            {% if is_past %}<span class="qa-pin-badge" style="margin-left:4px;">Past Event</span>{% endif %}
+            <div class="event-detail-date" style="margin-top:6px;">
+              {{ event.event_date }}
+              {% if event.event_time %} at {{ event.event_time }}{% endif %}
+              {% if event.end_time %} – {{ event.end_time }}{% endif %}
+            </div>
+            <h1 style="margin-bottom:8px;">{{ event.title }}</h1>
+          </div>
+          {% if event.user_id == current_user.id or membership.role in ('owner', 'admin') %}
+          <div class="flex gap-8">
+            <a href="/c/{{ community.slug }}/events/{{ event.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
+            <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/delete" onsubmit="return confirm('Delete this event?')">
+              <button class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </div>
+          {% endif %}
         </div>
-        <h1 style="margin-bottom:8px;">{{ event.title }}</h1>
+
+        <!-- Event Info Grid -->
+        <div class="event-info-grid mb-16">
+          {% if event.location %}
+          <div class="event-info-item">
+            <div class="label">Location</div>
+            <div>{{ event.location }}</div>
+          </div>
+          {% endif %}
+          <div class="event-info-item">
+            <div class="label">Type</div>
+            <span class="badge badge-{{ 'member' if event.location_type == 'in-person' else 'admin' }}">{{ event.location_type }}</span>
+          </div>
+          {% if event.capacity > 0 %}
+          <div class="event-info-item">
+            <div class="label">Capacity</div>
+            <div>{{ going_count }}/{{ event.capacity }} spots{% if is_full %} <span style="color:#e05050;">(Full)</span>{% endif %}</div>
+          </div>
+          {% endif %}
+          {% if event.link %}
+          <div class="event-info-item">
+            <div class="label">Link</div>
+            <a href="{{ event.link }}" target="_blank" rel="noopener" style="color:#7070e0;font-size:13px;">{{ event.link[:50] }}{{ '...' if event.link|length > 50 else '' }}</a>
+          </div>
+          {% endif %}
+          <div class="event-info-item">
+            <div class="label">Hosted by</div>
+            <a href="/c/{{ community.slug }}/members/{{ event.user_id }}" style="color:#eee;font-size:13px;">{{ event.creator_name }}</a>
+          </div>
+        </div>
+
+        <!-- Speakers -->
+        {% if speaker_list %}
+        <div class="mb-16">
+          <div class="label" style="margin-bottom:8px;">Speakers</div>
+          <div class="flex gap-8" style="flex-wrap:wrap;">
+            {% for sp in speaker_list %}
+            <a href="/c/{{ community.slug }}/members/{{ sp.id }}" class="ev-speaker">
+              <span class="qa-avatar">{{ sp.name[0] | upper }}</span>
+              <span>{{ sp.name }}</span>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if event.description %}
+        <div class="post-body md-content">{{ event.description | markdown }}</div>
+        {% endif %}
+
+        <!-- Calendar Links -->
+        <div class="ev-cal-links mt-16">
+          <div class="label" style="margin-bottom:8px;">Add to Calendar</div>
+          <div class="flex gap-8" style="flex-wrap:wrap;">
+            <a href="/c/{{ community.slug }}/events/{{ event.id }}/ics" class="btn btn-ghost btn-sm">📅 Download .ics</a>
+            <a href="{{ google_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Google Calendar</a>
+            <a href="{{ outlook_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Outlook</a>
+          </div>
+        </div>
       </div>
-      {% if event.user_id == current_user.id or membership.role in ('owner', 'admin') %}
-      <div class="flex gap-8">
-        <a href="/c/{{ community.slug }}/events/{{ event.id }}/edit" class="btn btn-ghost btn-sm">Edit</a>
-        <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/delete" onsubmit="return confirm('Delete this event?')">
-          <button class="btn btn-danger btn-sm">Delete</button>
-        </form>
+
+      <!-- Post-Event Content (past events) -->
+      {% if is_past and (event.recording_url or event.slides_url or event.notes) %}
+      <div class="card mb-16">
+        <h2>Post-Event Content</h2>
+        {% if event.recording_url %}
+        <div class="mb-16">
+          <div class="label">Recording</div>
+          {% set embed = None %}
+          {% if 'youtube.com' in event.recording_url or 'youtu.be' in event.recording_url or 'vimeo.com' in event.recording_url or 'loom.com' in event.recording_url %}
+          <div class="video-embed" style="margin-top:8px;">
+            <iframe src="{{ event.recording_url }}" frameborder="0" allowfullscreen></iframe>
+          </div>
+          {% else %}
+          <a href="{{ event.recording_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="margin-top:4px;">Watch Recording ↗</a>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if event.slides_url %}
+        <div class="mb-16">
+          <div class="label">Slides</div>
+          <a href="{{ event.slides_url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="margin-top:4px;">View Slides ↗</a>
+        </div>
+        {% endif %}
+        {% if event.notes %}
+        <div>
+          <div class="label">Notes</div>
+          <div class="post-body md-content" style="margin-top:8px;">{{ event.notes | markdown }}</div>
+        </div>
+        {% endif %}
       </div>
       {% endif %}
-    </div>
 
-    <div class="event-info-grid mb-16">
-      {% if event.location %}
-      <div class="event-info-item">
-        <div class="label">Location</div>
-        <div>{{ event.location }}</div>
+      <!-- Discussion Thread Link -->
+      {% if event.post_id %}
+      <div class="card mb-16">
+        <a href="/c/{{ community.slug }}/posts/{{ event.post_id }}" style="font-size:13px;color:#7070e0;">💬 Join the discussion thread for this event →</a>
       </div>
       {% endif %}
-      <div class="event-info-item">
-        <div class="label">Type</div>
-        <span class="badge badge-{{ 'member' if event.location_type == 'in-person' else 'admin' }}">{{ event.location_type }}</span>
-      </div>
-      {% if event.link %}
-      <div class="event-info-item">
-        <div class="label">Link</div>
-        <a href="{{ event.link }}" target="_blank" rel="noopener" style="color:#7070e0;font-size:13px;">{{ event.link[:50] }}{{ '...' if event.link|length > 50 else '' }}</a>
+
+      <!-- RSVP -->
+      {% if not is_past %}
+      <div class="card mb-16">
+        <h2>RSVP</h2>
+        {% if my_rsvp and my_rsvp.waitlist %}
+        <div class="msg msg-ok" style="margin-bottom:12px;">You're on the waitlist. We'll notify you if a spot opens up.</div>
+        {% endif %}
+        <div class="flex gap-8">
+          <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
+            <input type="hidden" name="status" value="going" />
+            <button class="btn {% if is_full and (not my_rsvp or my_rsvp.status != 'going') %}btn-ghost{% else %}btn-primary{% endif %}"
+                    style="{{ 'background:#1a3a1a;border:1px solid #2a5a2a;color:#5adb8a;' if my_rsvp and my_rsvp.status == 'going' and not my_rsvp.waitlist else '' }}">
+              {% if is_full and (not my_rsvp or my_rsvp.status != 'going') %}Join Waitlist{% elif my_rsvp and my_rsvp.status == 'going' and not my_rsvp.waitlist %}Going ✓{% else %}Going{% endif %}
+            </button>
+          </form>
+          <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
+            <input type="hidden" name="status" value="maybe" />
+            <button class="btn btn-ghost" style="{{ 'background:#2a2a1a;border-color:#4a4a2a;color:#c0a040;' if my_rsvp and my_rsvp.status == 'maybe' else '' }}">Maybe</button>
+          </form>
+          <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
+            <input type="hidden" name="status" value="not-going" />
+            <button class="btn btn-ghost">Can't Go</button>
+          </form>
+        </div>
       </div>
       {% endif %}
-      <div class="event-info-item">
-        <div class="label">Hosted by</div>
-        <a href="/c/{{ community.slug }}/members/{{ event.user_id }}" style="color:#eee;font-size:13px;">{{ event.creator_name }}</a>
+
+      <!-- Attendees -->
+      <div class="card">
+        <h2>Attendees ({{ attendees | length }}){% if event.capacity > 0 %} / {{ event.capacity }}{% endif %}</h2>
+        {% if attendees %}
+        <div class="attendee-list">
+          {% for a in attendees %}
+          <div class="attendee-item">
+            <div class="profile-avatar" style="width:32px;height:32px;font-size:13px;">{{ a.name[0] | upper }}</div>
+            <a href="/c/{{ community.slug }}/members/{{ a.id }}" style="color:#eee;font-size:13px;">{{ a.name }}</a>
+            <span class="badge badge-{{ 'owner' if a.status == 'going' else 'member' }}" style="margin-left:8px;">{{ a.status }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">No RSVPs yet.</div>
+        {% endif %}
+
+        {% if waitlist %}
+        <div style="margin-top:16px;padding-top:16px;border-top:1px solid #1a1a1a;">
+          <div class="label" style="margin-bottom:8px;">Waitlist ({{ waitlist | length }})</div>
+          {% for w in waitlist %}
+          <div class="attendee-item">
+            <div class="profile-avatar" style="width:28px;height:28px;font-size:11px;">{{ w.name[0] | upper }}</div>
+            <span style="font-size:12px;color:#888;">{{ w.name }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
     </div>
 
-    {% if event.description %}
-    <div class="post-body">{{ event.description }}</div>
-    {% endif %}
-  </div>
-
-  <!-- RSVP -->
-  <div class="card mb-24">
-    <h2>RSVP</h2>
-    <div class="flex gap-8">
-      <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
-        <input type="hidden" name="status" value="going" />
-        <button class="btn {{ 'btn-primary' if not my_rsvp or my_rsvp.status != 'going' else 'btn-ghost' }}" style="{{ 'background:#1a3a1a;border:1px solid #2a5a2a;color:#5adb8a;' if my_rsvp and my_rsvp.status == 'going' else '' }}">Going</button>
-      </form>
-      <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
-        <input type="hidden" name="status" value="maybe" />
-        <button class="btn {{ 'btn-primary' if not my_rsvp or my_rsvp.status != 'maybe' else 'btn-ghost' }}" style="{{ 'background:#2a2a1a;border:1px solid #4a4a2a;color:#c0a040;' if my_rsvp and my_rsvp.status == 'maybe' else '' }}">Maybe</button>
-      </form>
-      <form method="POST" action="/c/{{ community.slug }}/events/{{ event.id }}/rsvp">
-        <input type="hidden" name="status" value="not-going" />
-        <button class="btn btn-ghost">Can't Go</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Attendees -->
-  <div class="card">
-    <h2>Attendees ({{ attendees | length }})</h2>
-    {% if attendees %}
-    <div class="attendee-list">
-      {% for a in attendees %}
-      <div class="attendee-item">
-        <div class="profile-avatar" style="width:32px;height:32px;font-size:13px;">{{ a.name[0] | upper }}</div>
-        <a href="/c/{{ community.slug }}/members/{{ a.id }}" style="color:#eee;font-size:13px;">{{ a.name }}</a>
-        <span class="badge badge-{{ 'owner' if a.status == 'going' else 'member' }}" style="margin-left:8px;">{{ a.status }}</span>
+    <!-- Sidebar -->
+    <aside class="ch-sidebar">
+      <div class="ch-sidebar-cta">
+        <div class="ch-cta-icon">📅</div>
+        <div class="ch-cta-title">{{ event.title }}</div>
+        <div class="ch-cta-text">{{ event.event_date }}{% if event.event_time %} at {{ event.event_time }}{% endif %}</div>
+        {% if not is_past %}
+        <a href="/c/{{ community.slug }}/events/{{ event.id }}/ics" class="btn btn-primary" style="width:100%;justify-content:center;">Add to Calendar</a>
+        {% endif %}
       </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty">No RSVPs yet. Be the first!</div>
-    {% endif %}
+
+      <div class="ch-sidebar-card">
+        <div class="ch-sidebar-title">Share Event</div>
+        <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="navigator.clipboard.writeText(window.location.href);this.innerHTML='✓ Copied!';setTimeout(()=>this.innerHTML='↗ Copy Link',1500)">↗ Copy Link</button>
+      </div>
+    </aside>
   </div>
 </div>
 {% endblock %}

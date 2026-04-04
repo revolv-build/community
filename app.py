@@ -1403,6 +1403,61 @@ def community_comment_award(slug, cid):
 
 # ── Community: Events ────────────────────────────────────────────
 
+EVENT_TYPES = {
+    "event": "Event", "webinar": "Webinar", "workshop": "Workshop",
+    "ama": "AMA", "meetup": "Meetup", "social": "Social",
+}
+
+def _generate_ics(event, community):
+    """Generate an .ics calendar file for an event."""
+    uid = f"event-{event['id']}@community"
+    dtstart = event["event_date"].replace("-", "")
+    if event["event_time"]:
+        dtstart += "T" + event["event_time"].replace(":", "") + "00Z"
+    dtend = dtstart
+    if event["end_time"]:
+        dtend = event["event_date"].replace("-", "") + "T" + event["end_time"].replace(":", "") + "00Z"
+    desc = (event["description"] or "").replace("\n", "\\n")
+    return f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Community//Events//EN
+BEGIN:VEVENT
+UID:{uid}
+DTSTART:{dtstart}
+DTEND:{dtend}
+SUMMARY:{event['title']}
+DESCRIPTION:{desc}
+LOCATION:{event['location'] or ''}
+URL:{event['link'] or ''}
+END:VEVENT
+END:VCALENDAR"""
+
+def _google_cal_url(event):
+    """Generate a Google Calendar add URL."""
+    dates = event["event_date"].replace("-", "")
+    if event["event_time"]:
+        dates += "T" + event["event_time"].replace(":", "") + "00Z"
+    end = dates
+    if event["end_time"]:
+        end = event["event_date"].replace("-", "") + "T" + event["end_time"].replace(":", "") + "00Z"
+    from urllib.parse import quote
+    desc = (event["description"] or "")[:500]
+    loc = event["location"] or ""
+    return f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={quote(event['title'])}&dates={dates}/{end}&details={quote(desc)}&location={quote(loc)}"
+
+def _outlook_cal_url(event):
+    """Generate an Outlook web calendar URL."""
+    from urllib.parse import quote
+    start = event["event_date"]
+    if event["event_time"]:
+        start += "T" + event["event_time"] + ":00"
+    end = start
+    if event["end_time"]:
+        end = event["event_date"] + "T" + event["end_time"] + ":00"
+    desc = (event["description"] or "")[:500]
+    loc = event["location"] or ""
+    return f"https://outlook.office.com/calendar/0/deeplink/compose?subject={quote(event['title'])}&startdt={start}&enddt={end}&body={quote(desc)}&location={quote(loc)}"
+
 @app.route("/c/<slug>/events")
 @community_member_required
 def community_events(slug):
@@ -1414,7 +1469,8 @@ def community_events(slug):
     if view == "past":
         events = db.execute("""
             SELECT e.*, u.name AS creator_name,
-                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going' AND r.waitlist = 0) AS going_count,
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.waitlist = 1) AS waitlist_count
             FROM events e JOIN users u ON e.user_id = u.id
             WHERE e.community_id = ? AND e.event_date < ?
             ORDER BY e.event_date DESC
@@ -1423,7 +1479,8 @@ def community_events(slug):
         month = request.args.get("month", datetime.utcnow().strftime("%Y-%m"))
         events = db.execute("""
             SELECT e.*, u.name AS creator_name,
-                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going' AND r.waitlist = 0) AS going_count,
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.waitlist = 1) AS waitlist_count
             FROM events e JOIN users u ON e.user_id = u.id
             WHERE e.community_id = ? AND e.event_date LIKE ?
             ORDER BY e.event_date ASC, e.event_time ASC
@@ -1433,31 +1490,32 @@ def community_events(slug):
     else:
         events = db.execute("""
             SELECT e.*, u.name AS creator_name,
-                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going') AS going_count
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.status = 'going' AND r.waitlist = 0) AS going_count,
+                   (SELECT COUNT(*) FROM rsvps r WHERE r.event_id = e.id AND r.waitlist = 1) AS waitlist_count
             FROM events e JOIN users u ON e.user_id = u.id
             WHERE e.community_id = ? AND e.event_date >= ?
             ORDER BY e.event_date ASC, e.event_time ASC
         """, (community["id"], now)).fetchall()
 
-    # Check current user's RSVPs
     event_ids = [e["id"] for e in events]
     my_rsvps = {}
     if event_ids:
         placeholders = ",".join("?" * len(event_ids))
         rows = db.execute(
-            f"SELECT event_id, status FROM rsvps WHERE user_id = ? AND event_id IN ({placeholders})",
+            f"SELECT event_id, status, waitlist FROM rsvps WHERE user_id = ? AND event_id IN ({placeholders})",
             [session["user_id"]] + event_ids
         ).fetchall()
-        my_rsvps = {r["event_id"]: r["status"] for r in rows}
+        my_rsvps = {r["event_id"]: {"status": r["status"], "waitlist": r["waitlist"]} for r in rows}
 
     return render_template("community/events.html", community=community,
                            membership=g.membership, events=events,
-                           my_rsvps=my_rsvps, view=view)
+                           my_rsvps=my_rsvps, view=view, event_types=EVENT_TYPES)
 
 @app.route("/c/<slug>/events/new", methods=["GET", "POST"])
 @community_member_required
 def community_new_event(slug):
     community = g.community
+    db = get_db()
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip()
@@ -1467,29 +1525,52 @@ def community_new_event(slug):
         location = request.form.get("location", "").strip()
         location_type = request.form.get("location_type", "in-person")
         link = request.form.get("link", "").strip()
+        event_type = request.form.get("event_type", "event")
+        capacity = int(request.form.get("capacity", 0) or 0)
+        speakers = request.form.get("speakers", "").strip()
 
         if not title or not event_date:
             flash("Title and date are required.", "error")
             return redirect(f"/c/{slug}/events/new")
 
-        db = get_db()
         now = datetime.utcnow().isoformat()
         cursor = db.execute("""
             INSERT INTO events (community_id, user_id, title, description, event_date,
-                                event_time, end_time, location, location_type, link, created)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                event_time, end_time, location, location_type, link,
+                                event_type, capacity, speakers, created)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (community["id"], session["user_id"], title, description, event_date,
-              event_time, end_time, location, location_type, link, now))
+              event_time, end_time, location, location_type, link,
+              event_type, capacity, speakers, now))
         event_id = cursor.lastrowid
+
         # Auto-RSVP the creator
         db.execute("INSERT INTO rsvps (event_id, user_id, status, created) VALUES (?, ?, ?, ?)",
                    (event_id, session["user_id"], "going", now))
+
+        # Auto-create discussion thread
+        post_cursor = db.execute("""
+            INSERT INTO posts (community_id, user_id, title, body, category, is_pinned, created, updated)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (community["id"], session["user_id"],
+              f"Event Discussion: {title}",
+              f"Discussion thread for **{title}** on {event_date}.\n\n{description[:200] if description else 'Share your thoughts, questions, or what you are looking forward to!'}",
+              "Events", 0, now, now))
+        post_id = post_cursor.lastrowid
+        db.execute("UPDATE events SET post_id = ? WHERE id = ?", (post_id, event_id))
+
         db.commit()
-        flash("Event created!", "success")
+        flash("Event created with discussion thread!", "success")
         return redirect(f"/c/{slug}/events/{event_id}")
 
+    # Get community members for speaker selection
+    members = db.execute("""
+        SELECT u.id, u.name FROM memberships m JOIN users u ON m.user_id = u.id
+        WHERE m.community_id = ? ORDER BY u.name
+    """, (community["id"],)).fetchall()
     return render_template("community/new_event.html", community=community,
-                           membership=g.membership, event=None)
+                           membership=g.membership, event=None,
+                           event_types=EVENT_TYPES, members=members)
 
 @app.route("/c/<slug>/events/<int:eid>")
 @community_member_required
@@ -1506,20 +1587,60 @@ def community_view_event(slug, eid):
         return redirect(f"/c/{slug}/events")
 
     attendees = db.execute("""
-        SELECT u.id, u.name, r.status, r.created
+        SELECT u.id, u.name, r.status, r.waitlist, r.created
         FROM rsvps r JOIN users u ON r.user_id = u.id
-        WHERE r.event_id = ?
+        WHERE r.event_id = ? AND r.waitlist = 0
+        ORDER BY r.created ASC
+    """, (eid,)).fetchall()
+
+    waitlist = db.execute("""
+        SELECT u.id, u.name, r.created
+        FROM rsvps r JOIN users u ON r.user_id = u.id
+        WHERE r.event_id = ? AND r.waitlist = 1
         ORDER BY r.created ASC
     """, (eid,)).fetchall()
 
     my_rsvp = db.execute(
-        "SELECT status FROM rsvps WHERE event_id = ? AND user_id = ?",
+        "SELECT status, waitlist FROM rsvps WHERE event_id = ? AND user_id = ?",
         (eid, session["user_id"])
     ).fetchone()
 
+    going_count = len([a for a in attendees if a["status"] == "going"])
+    is_full = event["capacity"] > 0 and going_count >= event["capacity"]
+    is_past = event["event_date"] < datetime.utcnow().strftime("%Y-%m-%d")
+
+    # Speaker info
+    speaker_ids = [int(s.strip()) for s in (event["speakers"] or "").split(",") if s.strip().isdigit()]
+    speaker_list = []
+    for sid in speaker_ids:
+        sp = get_user_by_id(sid)
+        if sp:
+            speaker_list.append(sp)
+
+    google_url = _google_cal_url(event)
+    outlook_url = _outlook_cal_url(event)
+
     return render_template("community/event_detail.html", community=community,
                            membership=g.membership, event=event,
-                           attendees=attendees, my_rsvp=my_rsvp)
+                           attendees=attendees, waitlist=waitlist, my_rsvp=my_rsvp,
+                           going_count=going_count, is_full=is_full, is_past=is_past,
+                           speaker_list=speaker_list, google_url=google_url,
+                           outlook_url=outlook_url, event_types=EVENT_TYPES)
+
+@app.route("/c/<slug>/events/<int:eid>/ics")
+@community_member_required
+def community_event_ics(slug, eid):
+    db = get_db()
+    community = g.community
+    event = db.execute("SELECT * FROM events WHERE id = ? AND community_id = ?",
+                       (eid, community["id"])).fetchone()
+    if not event:
+        abort(404)
+    ics = _generate_ics(event, community)
+    return ics, 200, {
+        "Content-Type": "text/calendar; charset=utf-8",
+        "Content-Disposition": f"attachment; filename={slug}-event-{eid}.ics"
+    }
 
 @app.route("/c/<slug>/events/<int:eid>/edit", methods=["GET", "POST"])
 @community_member_required
@@ -1542,6 +1663,12 @@ def community_edit_event(slug, eid):
         location = request.form.get("location", "").strip()
         location_type = request.form.get("location_type", "in-person")
         link = request.form.get("link", "").strip()
+        event_type = request.form.get("event_type", "event")
+        capacity = int(request.form.get("capacity", 0) or 0)
+        speakers = request.form.get("speakers", "").strip()
+        recording_url = request.form.get("recording_url", "").strip()
+        slides_url = request.form.get("slides_url", "").strip()
+        notes = request.form.get("notes", "").strip()
 
         if not title or not event_date:
             flash("Title and date are required.", "error")
@@ -1549,16 +1676,24 @@ def community_edit_event(slug, eid):
 
         db.execute("""
             UPDATE events SET title=?, description=?, event_date=?, event_time=?,
-                              end_time=?, location=?, location_type=?, link=?
+                              end_time=?, location=?, location_type=?, link=?,
+                              event_type=?, capacity=?, speakers=?,
+                              recording_url=?, slides_url=?, notes=?
             WHERE id=?
         """, (title, description, event_date, event_time, end_time,
-              location, location_type, link, eid))
+              location, location_type, link, event_type, capacity, speakers,
+              recording_url, slides_url, notes, eid))
         db.commit()
         flash("Event updated.", "success")
         return redirect(f"/c/{slug}/events/{eid}")
 
+    members = db.execute("""
+        SELECT u.id, u.name FROM memberships m JOIN users u ON m.user_id = u.id
+        WHERE m.community_id = ? ORDER BY u.name
+    """, (community["id"],)).fetchall()
     return render_template("community/new_event.html", community=community,
-                           membership=g.membership, event=event)
+                           membership=g.membership, event=event,
+                           event_types=EVENT_TYPES, members=members)
 
 @app.route("/c/<slug>/events/<int:eid>/delete", methods=["POST"])
 @community_member_required
@@ -1583,20 +1718,53 @@ def community_rsvp(slug, eid):
     if status not in ("going", "maybe", "not-going"):
         status = "going"
     db = get_db()
+    community = g.community
+    event = db.execute("SELECT * FROM events WHERE id = ? AND community_id = ?",
+                       (eid, community["id"])).fetchone()
+    if not event:
+        return redirect(f"/c/{slug}/events")
+
     existing = db.execute(
-        "SELECT id FROM rsvps WHERE event_id = ? AND user_id = ?",
+        "SELECT id, waitlist FROM rsvps WHERE event_id = ? AND user_id = ?",
         (eid, session["user_id"])
     ).fetchone()
     now = datetime.utcnow().isoformat()
-    if status == "not-going" and existing:
-        db.execute("DELETE FROM rsvps WHERE event_id = ? AND user_id = ?",
-                   (eid, session["user_id"]))
+
+    if status == "not-going":
+        if existing:
+            was_waitlisted = existing["waitlist"]
+            db.execute("DELETE FROM rsvps WHERE event_id = ? AND user_id = ?",
+                       (eid, session["user_id"]))
+            # Promote first waitlisted person if someone left a full event
+            if not was_waitlisted and event["capacity"] > 0:
+                next_up = db.execute(
+                    "SELECT id, user_id FROM rsvps WHERE event_id = ? AND waitlist = 1 ORDER BY created ASC LIMIT 1",
+                    (eid,)
+                ).fetchone()
+                if next_up:
+                    db.execute("UPDATE rsvps SET waitlist = 0 WHERE id = ?", (next_up["id"],))
+                    db.execute("""
+                        INSERT INTO notifications (user_id, community_id, post_id, type, message, created)
+                        VALUES (?, ?, NULL, ?, ?, ?)
+                    """, (next_up["user_id"], community["id"], "event",
+                          f'A spot opened up! You\'re now confirmed for "{event["title"]}"', now))
     elif existing:
-        db.execute("UPDATE rsvps SET status = ? WHERE event_id = ? AND user_id = ?",
+        db.execute("UPDATE rsvps SET status = ?, waitlist = 0 WHERE event_id = ? AND user_id = ?",
                    (status, eid, session["user_id"]))
     else:
-        db.execute("INSERT INTO rsvps (event_id, user_id, status, created) VALUES (?, ?, ?, ?)",
-                   (eid, session["user_id"], status, now))
+        # Check capacity
+        on_waitlist = 0
+        if status == "going" and event["capacity"] > 0:
+            going_count = db.execute(
+                "SELECT COUNT(*) FROM rsvps WHERE event_id = ? AND status = 'going' AND waitlist = 0",
+                (eid,)
+            ).fetchone()[0]
+            if going_count >= event["capacity"]:
+                on_waitlist = 1
+                flash("Event is full — you've been added to the waitlist.", "success")
+        db.execute("INSERT INTO rsvps (event_id, user_id, status, waitlist, created) VALUES (?, ?, ?, ?, ?)",
+                   (eid, session["user_id"], status, on_waitlist, now))
+
     db.commit()
     return redirect(f"/c/{slug}/events/{eid}")
 

@@ -834,6 +834,11 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
   .palette-item { width: calc(50% - 3px); }
 }
 
+/* ── Event Speakers ────────────────────────────────────────────── */
+.ev-speaker { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; background: #141414; border: 1px solid #1e1e1e; border-radius: 20px; font-size: 12px; color: #ccc; transition: border-color .12s; }
+.ev-speaker:hover { border-color: #333; color: #fff; }
+.ev-cal-links { padding-top: 16px; border-top: 1px solid #1a1a1a; }
+
 /* ── Admin Bar ────────────────────────────────────────────────── */
 .admin-bar { background: linear-gradient(90deg, #1a1400 0%, #0a0a0a 50%, #0a0a14 100%); border-bottom: 1px solid #2a2200; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; height: 34px; }
 .ab-left, .ab-right { display: flex; align-items: center; gap: 4px; }
