@@ -1,0 +1,48 @@
+{% extends "community/base.html" %}
+{% block title %}New {{ info.label }} Entry - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div style="margin-bottom:12px;">
+    <a href="/c/{{ community.slug }}/channel/{{ channel }}" style="font-size:12px;color:#7070e0;">← Back to {{ info.label }}</a>
+  </div>
+  <h1>New {{ info.label[:-1] if info.label.endswith('s') else info.label }} Entry</h1>
+  <div class="sub">Publish to {{ info.label }} in {{ community.name }}</div>
+
+  <div class="card">
+    <form method="POST">
+      <div class="field">
+        <div class="label">Title</div>
+        <input name="title" placeholder="Entry title" required autofocus />
+      </div>
+      <div class="field">
+        <div class="label">Excerpt / Summary</div>
+        <input name="excerpt" placeholder="A short description shown on the listing page" />
+      </div>
+      <div class="field">
+        <div class="label">Cover Image URL</div>
+        <input name="cover_url" placeholder="https://... (optional)" />
+      </div>
+      {% if channel == 'podcasts' %}
+      <div class="field">
+        <div class="label">Audio / Video URL</div>
+        <input name="media_url" placeholder="MP3 URL, YouTube, Spotify embed, etc." />
+        <div style="font-size:11px;color:#444;margin-top:4px;">YouTube and Vimeo links auto-embed. Direct MP3 URLs show an audio player.</div>
+      </div>
+      {% elif channel in ('news', 'blog') %}
+      <div class="field">
+        <div class="label">Featured Video URL (optional)</div>
+        <input name="media_url" placeholder="YouTube, Vimeo, or Loom URL" />
+      </div>
+      {% endif %}
+      <div class="field">
+        <div class="label">Body</div>
+        <textarea name="body" class="md-editor" style="min-height:250px;" placeholder="Write your content... (Markdown supported)"></textarea>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-primary">Publish</button>
+        <a href="/c/{{ community.slug }}/channel/{{ channel }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

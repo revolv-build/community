@@ -437,6 +437,57 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 .lb-comments .qa-comment-form { padding: 12px 20px; border-bottom: 1px solid #1a1a1a; }
 .lb-comments .qa-comment { padding: 12px 20px; }
 
+/* ── Content Channels ─────────────────────────────────────────── */
+.ch-layout { display: flex; gap: 24px; }
+.ch-main { flex: 1; min-width: 0; }
+.ch-sidebar { width: 280px; flex-shrink: 0; }
+
+/* Channel cards */
+.ch-card { display: flex; gap: 16px; background: #111; border: 1px solid #1e1e1e; border-radius: 4px; padding: 16px; margin-bottom: 10px; transition: border-color .12s; text-decoration: none; color: inherit; }
+.ch-card:hover { border-color: #333; }
+.ch-card-cover { width: 120px; height: 80px; flex-shrink: 0; border-radius: 4px; overflow: hidden; background: #0a0a0a; }
+.ch-card-cover img { width: 100%; height: 100%; object-fit: cover; }
+.ch-card-body { flex: 1; min-width: 0; }
+.ch-card-title { font-size: 15px; font-weight: 600; color: #eee; margin-bottom: 4px; }
+.ch-card-meta { font-size: 12px; color: #555; margin-bottom: 6px; }
+.ch-card-excerpt { font-size: 13px; color: #888; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ch-card-badge { display: inline-block; margin-top: 6px; padding: 2px 8px; font-size: 10px; font-weight: 600; color: #7070e0; background: #12122a; border: 1px solid #2a2a4a; border-radius: 2px; }
+
+/* Channel entry detail */
+.ch-entry { background: #111; border: 1px solid #1e1e1e; border-radius: 4px; overflow: hidden; }
+.ch-entry-cover { max-height: 300px; overflow: hidden; }
+.ch-entry-cover img { width: 100%; object-fit: cover; }
+.ch-entry-header { padding: 24px; }
+.ch-entry-title { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 8px; line-height: 1.25; }
+.ch-entry-meta { font-size: 13px; color: #666; }
+.ch-entry-meta a { color: #999; }
+.ch-entry-meta a:hover { color: #fff; }
+.ch-entry-body { padding: 0 24px 24px; }
+.ch-entry-actions { padding: 16px 24px; border-top: 1px solid #1a1a1a; }
+
+/* Channel sidebar */
+.ch-sidebar-cta { background: linear-gradient(135deg, #12122a 0%, #0a1420 100%); border: 1px solid #2a2a4a; border-radius: 4px; padding: 20px; margin-bottom: 16px; text-align: center; }
+.ch-cta-icon { font-size: 28px; margin-bottom: 8px; }
+.ch-cta-title { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+.ch-cta-text { font-size: 12px; color: #888; line-height: 1.4; margin-bottom: 14px; }
+.ch-sidebar-card { background: #111; border: 1px solid #1e1e1e; border-radius: 4px; padding: 16px; margin-bottom: 12px; }
+.ch-sidebar-title { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: #555; margin-bottom: 10px; }
+.ch-sidebar-link { display: block; padding: 6px 0; font-size: 13px; color: #999; border-bottom: 1px solid #141414; line-height: 1.3; }
+.ch-sidebar-link:last-child { border-bottom: none; }
+.ch-sidebar-link:hover { color: #fff; }
+
+/* Channel toggle buttons in settings */
+.ch-toggle-btn { width: 100%; padding: 10px 14px; background: #111; border: 1px solid #1e1e1e; border-radius: 4px; color: #666; font-size: 13px; cursor: pointer; font-family: inherit; transition: all .12s; text-align: left; }
+.ch-toggle-btn:hover { border-color: #333; color: #ccc; }
+.ch-toggle-on { background: #0d2a1a; border-color: #1a5a30; color: #5adb8a; }
+
+@media (max-width: 768px) {
+  .ch-layout { flex-direction: column; }
+  .ch-sidebar { width: 100%; }
+  .ch-card { flex-direction: column; }
+  .ch-card-cover { width: 100%; height: 160px; }
+}
+
 /* ── Insight Loop ─────────────────────────────────────────────── */
 .il-points-banner { background: linear-gradient(135deg, #1a1400 0%, #0a0a1a 100%); border: 1px solid #2a2a1a; border-radius: 2px; padding: 20px 28px; display: flex; align-items: center; gap: 12px; }
 .il-points-value { font-size: 36px; font-weight: 800; color: #c0a040; }

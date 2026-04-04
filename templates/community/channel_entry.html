@@ -1,0 +1,87 @@
+{% extends "community/base.html" %}
+{% block title %}{{ entry.title }} - {{ info.label }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1060px;">
+  <div style="margin-bottom:12px;">
+    <a href="/c/{{ community.slug }}/channel/{{ channel }}" style="font-size:12px;color:#7070e0;">← Back to {{ info.label }}</a>
+  </div>
+
+  <div class="ch-layout">
+    <!-- Main Content -->
+    <div class="ch-main">
+      <div class="ch-entry">
+        {% if entry.cover_url %}
+        <div class="ch-entry-cover">
+          <img src="{{ entry.cover_url }}" alt="{{ entry.title }}" />
+        </div>
+        {% endif %}
+
+        <div class="ch-entry-header">
+          <h1 class="ch-entry-title">{{ entry.title }}</h1>
+          <div class="ch-entry-meta">
+            <a href="/c/{{ community.slug }}/members/{{ entry.user_id }}">{{ entry.author_name }}</a>
+            &middot; {{ entry.created[:10] }}
+            {% if membership.role in ('owner', 'admin') %}
+            &middot;
+            <form method="POST" action="/c/{{ community.slug }}/channel/{{ channel }}/{{ entry.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this entry?')">
+              <button class="qa-delete-btn">delete</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Media embed -->
+        {% if embed_url %}
+        <div class="video-embed" style="margin-bottom:24px;">
+          <iframe src="{{ embed_url }}" frameborder="0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>
+        </div>
+        {% elif entry.media_url and channel == 'podcasts' %}
+        <div class="ch-audio-player" style="margin-bottom:24px;">
+          <audio controls style="width:100%;">
+            <source src="{{ entry.media_url }}" />
+          </audio>
+        </div>
+        {% endif %}
+
+        <!-- Body -->
+        {% if entry.body %}
+        <div class="ch-entry-body md-content">{{ entry.body | markdown }}</div>
+        {% endif %}
+
+        <!-- Share -->
+        <div class="ch-entry-actions">
+          <button class="qa-action-btn-lg" onclick="navigator.clipboard.writeText(window.location.href);this.innerHTML='✓ Copied!';setTimeout(()=>this.innerHTML='↗ Share',1500)">↗ Share</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="ch-sidebar">
+      <!-- Join CTA -->
+      <div class="ch-sidebar-cta">
+        <div class="ch-cta-icon">{{ info.icon }}</div>
+        <div class="ch-cta-title">Join {{ community.name }}</div>
+        <div class="ch-cta-text">Get access to all {{ info.label.lower() }}, discussions, events, and resources.</div>
+        <a href="/join/{{ community.slug }}" class="btn btn-primary" style="width:100%;justify-content:center;">Join Community</a>
+      </div>
+
+      <!-- More from this channel -->
+      {% if other_entries %}
+      <div class="ch-sidebar-card">
+        <div class="ch-sidebar-title">More {{ info.label }}</div>
+        {% for e in other_entries %}
+        <a href="/c/{{ community.slug }}/channel/{{ channel }}/{{ e.id }}" class="ch-sidebar-link">{{ e.title }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- About -->
+      <div class="ch-sidebar-card">
+        <div class="ch-sidebar-title">About {{ community.name }}</div>
+        <div style="font-size:13px;color:#888;line-height:1.5;">{{ community.description or 'Welcome to our community.' }}</div>
+        <div style="font-size:12px;color:#555;margin-top:8px;">{{ member_count }} members</div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

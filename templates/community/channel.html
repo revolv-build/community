@@ -1,0 +1,74 @@
+{% extends "community/base.html" %}
+{% block title %}{{ info.label }} - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1060px;">
+  <div class="flex-between mb-24">
+    <div>
+      <h1>{{ info.icon }} {{ info.label }}</h1>
+      <div class="sub" style="margin-bottom:0;">{{ info.desc }}</div>
+    </div>
+    {% if membership.role in ('owner', 'admin') %}
+    <a href="/c/{{ community.slug }}/channel/{{ channel }}/new" class="btn btn-primary">New {{ info.label[:-1] if info.label.endswith('s') else info.label }}</a>
+    {% endif %}
+  </div>
+
+  <div class="ch-layout">
+    <!-- Content List -->
+    <div class="ch-main">
+      {% if entries %}
+        {% for e in entries %}
+        <a href="/c/{{ community.slug }}/channel/{{ channel }}/{{ e.id }}" class="ch-card">
+          {% if e.cover_url %}
+          <div class="ch-card-cover">
+            <img src="{{ e.cover_url }}" alt="{{ e.title }}" />
+          </div>
+          {% endif %}
+          <div class="ch-card-body">
+            <div class="ch-card-title">{{ e.title }}</div>
+            <div class="ch-card-meta">{{ e.author_name }} &middot; {{ e.created[:10] }}</div>
+            {% if e.excerpt %}
+            <div class="ch-card-excerpt">{{ e.excerpt }}</div>
+            {% endif %}
+            {% if channel == 'podcasts' and e.media_url %}
+            <div class="ch-card-badge">🎧 Episode</div>
+            {% elif channel == 'newsletter' %}
+            <div class="ch-card-badge">📧 Issue</div>
+            {% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="qa-empty">No {{ info.label.lower() }} published yet.</div>
+      {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="ch-sidebar">
+      <!-- Join CTA (for non-members viewing public channels) -->
+      <div class="ch-sidebar-cta">
+        <div class="ch-cta-icon">{{ info.icon }}</div>
+        <div class="ch-cta-title">Join {{ community.name }}</div>
+        <div class="ch-cta-text">{{ member_count }} members sharing knowledge, resources, and connections.</div>
+        <a href="/join/{{ community.slug }}" class="btn btn-primary" style="width:100%;justify-content:center;">Join Community</a>
+      </div>
+
+      <!-- Recent Discussions -->
+      {% if recent_posts %}
+      <div class="ch-sidebar-card">
+        <div class="ch-sidebar-title">Recent Discussions</div>
+        {% for p in recent_posts %}
+        <a href="/c/{{ community.slug }}/posts/{{ p.id }}" class="ch-sidebar-link">{{ p.title }}</a>
+        {% endfor %}
+        <a href="/c/{{ community.slug }}/" class="ch-sidebar-link" style="color:#7070e0;">View all →</a>
+      </div>
+      {% endif %}
+
+      <!-- About -->
+      <div class="ch-sidebar-card">
+        <div class="ch-sidebar-title">About {{ community.name }}</div>
+        <div style="font-size:13px;color:#888;line-height:1.5;">{{ community.description or 'Welcome to our community.' }}</div>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

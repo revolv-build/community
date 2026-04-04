@@ -68,6 +68,32 @@
         </a>
       </div>
 
+      {% if community.channel_podcasts or community.channel_news or community.channel_blog or community.channel_newsletter %}
+      <div class="sidebar-section">
+        <div class="sidebar-label">Content</div>
+        {% if community.channel_blog %}
+        <a href="/c/{{ community.slug }}/channel/blog" class="sidebar-link {% if '/channel/blog' in request.path %}active{% endif %}">
+          <span class="sidebar-icon">✍️</span> Blog
+        </a>
+        {% endif %}
+        {% if community.channel_podcasts %}
+        <a href="/c/{{ community.slug }}/channel/podcasts" class="sidebar-link {% if '/channel/podcasts' in request.path %}active{% endif %}">
+          <span class="sidebar-icon">🎙️</span> Podcasts
+        </a>
+        {% endif %}
+        {% if community.channel_news %}
+        <a href="/c/{{ community.slug }}/channel/news" class="sidebar-link {% if '/channel/news' in request.path %}active{% endif %}">
+          <span class="sidebar-icon">📰</span> News
+        </a>
+        {% endif %}
+        {% if community.channel_newsletter %}
+        <a href="/c/{{ community.slug }}/channel/newsletter" class="sidebar-link {% if '/channel/newsletter' in request.path %}active{% endif %}">
+          <span class="sidebar-icon">📧</span> Newsletter
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
       <div class="sidebar-section">
         <div class="sidebar-label">You</div>
         <a href="/c/{{ community.slug }}/bookmarks" class="sidebar-link {% if '/bookmarks' in request.path %}active{% endif %}">

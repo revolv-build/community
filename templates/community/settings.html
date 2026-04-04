@@ -106,6 +106,21 @@
     <input value="{{ request.host_url }}join/{{ community.slug }}" onclick="this.select()" readonly style="background:#0a0a0a;color:#7070e0;" />
   </div>
 
+  <div class="card mb-24">
+    <h2>Content Channels</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Enable or disable content sections for your community.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      {% for key, ch in [('blog', 'Blog'), ('podcasts', 'Podcasts'), ('news', 'News'), ('newsletter', 'Newsletter')] %}
+      <form method="POST" action="/c/{{ community.slug }}/settings/channels">
+        <input type="hidden" name="channel" value="{{ key }}" />
+        <button class="ch-toggle-btn {{ 'ch-toggle-on' if community['channel_' ~ key] else '' }}">
+          {{ '✓' if community['channel_' ~ key] else '+' }} {{ ch }}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+
   <div class="card">
     <h2>Insight Loop</h2>
     <p style="font-size:13px;color:#888;margin-bottom:12px;">Enable polls, points, and rewards for your community.</p>

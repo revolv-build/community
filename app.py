@@ -2023,6 +2023,130 @@ def community_invite_member(slug):
     flash(f"{user['name']} added to the community.", "success")
     return redirect(f"/c/{slug}/settings?tab=members")
 
+# ── Community: Content Channels ──────────────────────────────────
+
+CHANNELS = {
+    "podcasts":   {"label": "Podcasts", "icon": "🎙️", "flag": "channel_podcasts", "desc": "Listen to episodes from the community"},
+    "news":       {"label": "News", "icon": "📰", "flag": "channel_news", "desc": "Latest updates and announcements"},
+    "blog":       {"label": "Blog", "icon": "✍️", "flag": "channel_blog", "desc": "Articles and long-form content"},
+    "newsletter": {"label": "Newsletter", "icon": "📧", "flag": "channel_newsletter", "desc": "Regular updates delivered to you"},
+}
+
+@app.route("/c/<slug>/channel/<channel>")
+@community_member_required
+def community_channel(slug, channel):
+    if channel not in CHANNELS:
+        abort(404)
+    community = g.community
+    info = CHANNELS[channel]
+    if not community[info["flag"]]:
+        flash(f"{info['label']} is not enabled for this community.", "error")
+        return redirect(f"/c/{slug}/")
+    db = get_db()
+    entries = db.execute("""
+        SELECT ce.*, u.name AS author_name
+        FROM content_entries ce JOIN users u ON ce.user_id = u.id
+        WHERE ce.community_id = ? AND ce.channel = ? AND ce.published = 1
+        ORDER BY ce.created DESC
+    """, (community["id"], channel)).fetchall()
+    member_count = db.execute(
+        "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (community["id"],)
+    ).fetchone()[0]
+    recent_posts = db.execute("""
+        SELECT id, title, created FROM posts WHERE community_id = ?
+        ORDER BY created DESC LIMIT 5
+    """, (community["id"],)).fetchall()
+    return render_template("community/channel.html", community=community,
+                           membership=g.membership, entries=entries, channel=channel,
+                           info=info, member_count=member_count, recent_posts=recent_posts)
+
+@app.route("/c/<slug>/channel/<channel>/<int:eid>")
+@community_member_required
+def community_channel_entry(slug, channel, eid):
+    if channel not in CHANNELS:
+        abort(404)
+    community = g.community
+    info = CHANNELS[channel]
+    db = get_db()
+    entry = db.execute("""
+        SELECT ce.*, u.name AS author_name
+        FROM content_entries ce JOIN users u ON ce.user_id = u.id
+        WHERE ce.id = ? AND ce.community_id = ? AND ce.channel = ?
+    """, (eid, community["id"], channel)).fetchone()
+    if not entry:
+        flash("Entry not found.", "error")
+        return redirect(f"/c/{slug}/channel/{channel}")
+    # Detect video/audio embed
+    embed_url = _detect_video_embed(entry["media_url"]) if entry["media_url"] else None
+    member_count = db.execute(
+        "SELECT COUNT(*) FROM memberships WHERE community_id = ?", (community["id"],)
+    ).fetchone()[0]
+    other_entries = db.execute("""
+        SELECT id, title, created FROM content_entries
+        WHERE community_id = ? AND channel = ? AND id != ? AND published = 1
+        ORDER BY created DESC LIMIT 5
+    """, (community["id"], channel, eid)).fetchall()
+    return render_template("community/channel_entry.html", community=community,
+                           membership=g.membership, entry=entry, channel=channel,
+                           info=info, embed_url=embed_url, member_count=member_count,
+                           other_entries=other_entries)
+
+@app.route("/c/<slug>/channel/<channel>/new", methods=["GET", "POST"])
+@community_admin_required
+def community_channel_new(slug, channel):
+    if channel not in CHANNELS:
+        abort(404)
+    community = g.community
+    info = CHANNELS[channel]
+    if request.method == "POST":
+        title = request.form.get("title", "").strip()
+        body = request.form.get("body", "").strip()
+        excerpt = request.form.get("excerpt", "").strip()
+        cover_url = request.form.get("cover_url", "").strip()
+        media_url = request.form.get("media_url", "").strip()
+        if not title:
+            flash("Title is required.", "error")
+            return redirect(f"/c/{slug}/channel/{channel}/new")
+        db = get_db()
+        db.execute("""
+            INSERT INTO content_entries (community_id, user_id, channel, title, body, excerpt,
+                                         cover_url, media_url, created)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (community["id"], session["user_id"], channel, title, body, excerpt,
+              cover_url, media_url, datetime.utcnow().isoformat()))
+        db.commit()
+        flash(f"{info['label']} entry published!", "success")
+        return redirect(f"/c/{slug}/channel/{channel}")
+    return render_template("community/channel_new.html", community=community,
+                           membership=g.membership, channel=channel, info=info)
+
+@app.route("/c/<slug>/channel/<channel>/<int:eid>/delete", methods=["POST"])
+@community_admin_required
+def community_channel_delete(slug, channel, eid):
+    db = get_db()
+    db.execute("DELETE FROM content_entries WHERE id = ? AND community_id = ?",
+               (eid, g.community["id"]))
+    db.commit()
+    flash("Entry deleted.", "success")
+    return redirect(f"/c/{slug}/channel/{channel}")
+
+@app.route("/c/<slug>/settings/channels", methods=["POST"])
+@community_admin_required
+def community_toggle_channel(slug):
+    channel = request.form.get("channel", "")
+    if channel not in CHANNELS:
+        flash("Invalid channel.", "error")
+        return redirect(f"/c/{slug}/settings?tab=general")
+    db = get_db()
+    community = g.community
+    flag = CHANNELS[channel]["flag"]
+    new_val = 0 if community[flag] else 1
+    db.execute(f"UPDATE communities SET {flag} = ? WHERE id = ?", (new_val, community["id"]))
+    db.commit()
+    label = CHANNELS[channel]["label"]
+    flash(f"{label} {'enabled' if new_val else 'disabled'}.", "success")
+    return redirect(f"/c/{slug}/settings?tab=general")
+
 # ── Community: Insight Loop ──────────────────────────────────────
 
 def get_user_points(user_id, community_id):
