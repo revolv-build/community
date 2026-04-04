@@ -56,12 +56,28 @@ app.config["PERMANENT_SESSION_LIFETIME"] = 86400 * 7  # 7 days
 app.config["WTF_CSRF_TIME_LIMIT"] = 3600  # 1 hour CSRF token validity
 DEFAULT_PORT = int(os.environ.get("PORT", 5001))
 
+# Refuse to boot with default secret key in production
+if os.environ.get("FLASK_ENV") == "production" and app.secret_key == "change-me-in-production":
+    raise RuntimeError("SECRET_KEY must be set in production. Generate one with: python3 -c \"import secrets; print(secrets.token_hex(32))\"")
+
 # CSRF protection
 csrf = CSRFProtect(app)
 
 # Rate limiting
 limiter = Limiter(get_remote_address, app=app, default_limits=["200 per minute"],
                   storage_uri="memory://")
+
+# Security headers
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.is_secure:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 (APP_DIR / "data").mkdir(exist_ok=True)
 
@@ -283,6 +299,13 @@ def current_user():
         return get_user_by_id(uid)
     return None
 
+def login_user(user):
+    """Set session for user with session regeneration to prevent fixation."""
+    session.clear()
+    session["user_id"] = user["id"]
+    session["user_name"] = user["name"]
+    session.permanent = True
+
 def get_community_by_slug(slug):
     return get_db().execute("SELECT * FROM communities WHERE slug = ?", (slug,)).fetchone()
 
@@ -433,9 +456,7 @@ def login_page():
 
         user = get_user_by_email(request.form.get("email", ""))
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
-            session["user_id"] = user["id"]
-            session["user_name"] = user["name"]
-            session.permanent = True
+            login_user(user)
             return redirect("/dashboard")
         err = "Invalid email or password."
     return render_template("login.html", err=err, form_ts=form_ts)
@@ -487,8 +508,7 @@ def register_page():
             )
             db.commit()
             user = get_user_by_email(email)
-            session["user_id"] = user["id"]
-            session["user_name"] = user["name"]
+            login_user(user)
             flash("Welcome! Create your first community or join one.", "success")
             return redirect("/dashboard")
     return render_template("register.html", err=err, name=name, email=email, form_ts=form_ts)
@@ -1318,8 +1338,37 @@ def community_rsvp(slug, eid):
 
 # ── Community: Resources ─────────────────────────────────────────
 
+SAFE_MIMES = {
+    "application/pdf", "application/msword", "application/vnd.ms-excel", "application/zip",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/plain", "text/csv",
+    "image/png", "image/jpeg", "image/gif", "image/svg+xml", "image/webp",
+    "video/mp4", "video/quicktime", "video/webm",
+}
+
 def _allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def _validate_upload(file_storage):
+    """Check both extension and MIME type to prevent disguised uploads."""
+    if not file_storage or not file_storage.filename:
+        return False
+    if not _allowed_file(file_storage.filename):
+        return False
+    # Read first 8KB to sniff content type, then reset
+    header = file_storage.read(8192)
+    file_storage.seek(0)
+    # Block HTML/JS/PHP disguised as other files
+    if b"<script" in header.lower() or b"<?php" in header.lower() or b"<html" in header.lower():
+        return False
+    # Check declared MIME
+    if file_storage.content_type and file_storage.content_type not in SAFE_MIMES:
+        # Allow if content_type is generic (application/octet-stream) — browsers sometimes misreport
+        if file_storage.content_type != "application/octet-stream":
+            return False
+    return True
 
 def _detect_video_embed(url):
     """Extract embed URL from YouTube, Vimeo, or Loom links."""
@@ -1423,8 +1472,8 @@ def community_new_resource(slug):
 
         # Handle file upload
         if file and file.filename:
-            if not _allowed_file(file.filename):
-                flash(f"File type not allowed.", "error")
+            if not _validate_upload(file):
+                flash("File type not allowed or file contains unsafe content.", "error")
                 return redirect(f"/c/{slug}/resources/new")
             file_name = secure_filename(file.filename)
             ext = file_name.rsplit(".", 1)[1].lower()
