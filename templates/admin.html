@@ -1,143 +1,188 @@
 {% extends "base.html" %}
 {% block title %}Platform Admin{% endblock %}
 {% block content %}
-<div class="page" style="max-width:1100px;">
-  <h1>Platform Admin</h1>
-  <div class="sub">Overview of all communities, users, and activity</div>
+<div class="page" style="max-width:1200px;">
 
-  <!-- Stats -->
-  <div class="stats-grid stats-grid-6 mb-24">
-    <div class="stat-card">
-      <div class="stat-value">{{ stats.total_communities }}</div>
-      <div class="stat-label">Communities</div>
+  <!-- Header -->
+  <div class="adm-header">
+    <div>
+      <h1 class="adm-title">Command Centre</h1>
+      <div class="adm-subtitle">Platform overview and management</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ stats.total_users }}</div>
-      <div class="stat-label">Users</div>
+    <div class="adm-header-actions">
+      <div class="adm-pulse"><span class="adm-pulse-dot"></span> Live</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ stats.total_posts }}</div>
-      <div class="stat-label">Posts</div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="adm-stats">
+    <div class="adm-stat">
+      <div class="adm-stat-icon adm-stat-purple">&#9672;</div>
+      <div>
+        <div class="adm-stat-value">{{ stats.total_communities }}</div>
+        <div class="adm-stat-label">Communities</div>
+      </div>
+      {% if stats.new_communities_7d > 0 %}
+      <div class="adm-stat-delta adm-delta-up">+{{ stats.new_communities_7d }} this week</div>
+      {% endif %}
     </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ stats.total_comments }}</div>
-      <div class="stat-label">Comments</div>
+    <div class="adm-stat">
+      <div class="adm-stat-icon adm-stat-blue">&#9673;</div>
+      <div>
+        <div class="adm-stat-value">{{ stats.total_users }}</div>
+        <div class="adm-stat-label">Users</div>
+      </div>
+      {% if stats.new_users_7d > 0 %}
+      <div class="adm-stat-delta adm-delta-up">+{{ stats.new_users_7d }} this week</div>
+      {% endif %}
     </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ stats.new_communities_7d }}</div>
-      <div class="stat-label">New communities (7d)</div>
+    <div class="adm-stat">
+      <div class="adm-stat-icon adm-stat-green">&#9998;</div>
+      <div>
+        <div class="adm-stat-value">{{ stats.total_posts }}</div>
+        <div class="adm-stat-label">Posts</div>
+      </div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">{{ stats.new_users_7d }}</div>
-      <div class="stat-label">New users (7d)</div>
+    <div class="adm-stat">
+      <div class="adm-stat-icon adm-stat-gold">&#9741;</div>
+      <div>
+        <div class="adm-stat-value">{{ stats.total_comments }}</div>
+        <div class="adm-stat-label">Comments</div>
+      </div>
     </div>
   </div>
 
   <!-- Tabs -->
-  <div class="admin-tabs mb-24">
-    <a href="/admin" class="admin-tab {{ 'active' if tab == 'communities' else '' }}">Communities</a>
-    <a href="/admin?tab=users" class="admin-tab {{ 'active' if tab == 'users' else '' }}">Users</a>
-    <a href="/admin?tab=activity" class="admin-tab {{ 'active' if tab == 'activity' else '' }}">Activity</a>
+  <div class="adm-tabs">
+    <a href="/admin" class="adm-tab {{ 'active' if tab == 'communities' else '' }}">
+      <span class="adm-tab-icon">&#9672;</span> Communities
+    </a>
+    <a href="/admin?tab=users" class="adm-tab {{ 'active' if tab == 'users' else '' }}">
+      <span class="adm-tab-icon">&#9673;</span> Users
+    </a>
+    <a href="/admin?tab=activity" class="adm-tab {{ 'active' if tab == 'activity' else '' }}">
+      <span class="adm-tab-icon">&#9889;</span> Activity
+    </a>
   </div>
 
   {% if tab == 'activity' %}
   <!-- Activity Feed -->
-  <div class="card">
-    <h2>Platform Activity</h2>
+  <div class="adm-panel">
+    <div class="adm-panel-header">
+      <h2>Live Activity</h2>
+      <span class="adm-count">{{ activity | length }} events</span>
+    </div>
     {% if activity %}
-    <div class="activity-feed">
+    <div class="adm-activity">
       {% for item in activity %}
-      <div class="activity-item">
-        <div class="activity-icon activity-icon-{{ 'signup' if item.type == 'signup' else item.type }}">
-          {% if item.type == 'signup' %}+{% elif item.type == 'community' %}C{% elif item.type == 'post' %}P{% endif %}
+      <div class="adm-activity-row">
+        <div class="adm-activity-icon adm-ai-{{ item.type }}">
+          {% if item.type == 'signup' %}+{% elif item.type == 'community' %}&#9672;{% elif item.type == 'post' %}&#9998;{% endif %}
         </div>
-        <div class="activity-content">
-          <div class="activity-text">
-            {% if item.type == 'signup' %}
-              <strong>{{ item.user_name }}</strong> signed up
-            {% elif item.type == 'community' %}
-              <strong>{{ item.user_name }}</strong> created <a href="/c/{{ item.slug }}/">{{ item.detail }}</a>
-            {% elif item.type == 'post' %}
-              <strong>{{ item.user_name }}</strong> posted "{{ item.detail }}" in <a href="/c/{{ item.slug }}/">{{ item.community_name }}</a>
-            {% endif %}
-          </div>
-          <div class="activity-time">{{ item.created[:16] | replace('T', ' at ') }}</div>
+        <div class="adm-activity-body">
+          {% if item.type == 'signup' %}
+            <strong>{{ item.user_name }}</strong> signed up
+          {% elif item.type == 'community' %}
+            <strong>{{ item.user_name }}</strong> created <a href="/c/{{ item.slug }}/">{{ item.detail }}</a>
+          {% elif item.type == 'post' %}
+            <strong>{{ item.user_name }}</strong> posted "<a href="/c/{{ item.slug }}/">{{ item.detail[:50] }}</a>" in {{ item.community_name }}
+          {% endif %}
         </div>
+        <div class="adm-activity-time">{{ item.created | timeago }}</div>
       </div>
       {% endfor %}
     </div>
     {% else %}
-    <div class="empty">No activity yet.</div>
+    <div class="adm-empty">No activity yet.</div>
     {% endif %}
   </div>
 
   {% elif tab == 'users' %}
-  <!-- Users Table -->
-  <div class="card">
-    <h2>All Users ({{ users | length }})</h2>
-    <table>
-      <tr><th>Name</th><th>Email</th><th>Platform Admin</th><th>Communities Owned</th><th>Memberships</th><th>Joined</th><th></th></tr>
+  <!-- Users -->
+  <div class="adm-panel">
+    <div class="adm-panel-header">
+      <h2>All Users</h2>
+      <span class="adm-count">{{ users | length }}</span>
+    </div>
+    <div class="adm-user-list">
       {% for u in users %}
-      <tr>
-        <td style="color:#eee;">{{ u.name }}</td>
-        <td>{{ u.email }}</td>
-        <td>
+      <div class="adm-user-row">
+        <div class="adm-user-avatar">{{ u.name[0] | upper }}</div>
+        <div class="adm-user-info">
+          <div class="adm-user-name">{{ u.name }}</div>
+          <div class="adm-user-email">{{ u.email }}</div>
+        </div>
+        <div class="adm-user-meta">
           {% if u.is_admin %}
           <span class="badge badge-owner">admin</span>
           {% else %}
           <span class="badge badge-member">user</span>
           {% endif %}
-        </td>
-        <td>{{ u.communities_owned }}</td>
-        <td>{{ u.communities_joined }}</td>
-        <td>{{ u.created[:10] if u.created else '—' }}</td>
-        <td style="text-align:right;">
-          {% if u.id != current_user.id %}
-          <div class="flex gap-8" style="justify-content:flex-end;">
-            <form method="POST" action="/admin/users/{{ u.id }}/impersonate" style="display:inline;">
-              <button class="btn btn-primary btn-sm">View As</button>
-            </form>
-            <form method="POST" action="/admin/users/{{ u.id }}/toggle-admin" style="display:inline;">
-              <button class="btn btn-ghost btn-sm">{{ 'Revoke Admin' if u.is_admin else 'Make Admin' }}</button>
-            </form>
-            <form method="POST" action="/admin/users/{{ u.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete {{ u.name }} and all their data?')">
-              <button class="btn btn-danger btn-sm">Delete</button>
-            </form>
-          </div>
-          {% endif %}
-        </td>
-      </tr>
+        </div>
+        <div class="adm-user-stats">
+          <span title="Communities owned">{{ u.communities_owned }} owned</span>
+          <span title="Memberships">{{ u.communities_joined }} joined</span>
+        </div>
+        <div class="adm-user-date">{{ u.created | timeago }}</div>
+        {% if u.id != current_user.id %}
+        <div class="adm-user-actions">
+          <form method="POST" action="/admin/users/{{ u.id }}/impersonate" style="display:inline;">
+            <button class="adm-action-btn adm-action-view" title="View as this user">&#9673;</button>
+          </form>
+          <form method="POST" action="/admin/users/{{ u.id }}/toggle-admin" style="display:inline;">
+            <button class="adm-action-btn" title="{{ 'Revoke admin' if u.is_admin else 'Make admin' }}">&#9881;</button>
+          </form>
+          <form method="POST" action="/admin/users/{{ u.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete {{ u.name }}?')">
+            <button class="adm-action-btn adm-action-danger" title="Delete user">&times;</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
       {% endfor %}
-    </table>
+    </div>
   </div>
 
   {% else %}
-  <!-- Communities Table -->
-  <div class="card">
-    <h2>All Communities ({{ communities | length }})</h2>
-    <table>
-      <tr><th>Name</th><th>Slug</th><th>Owner</th><th>Members</th><th>Posts</th><th>Comments</th><th>Created</th><th></th></tr>
+  <!-- Communities -->
+  <div class="adm-panel">
+    <div class="adm-panel-header">
+      <h2>All Communities</h2>
+      <span class="adm-count">{{ communities | length }}</span>
+    </div>
+    <div class="adm-community-list">
       {% for c in communities %}
-      <tr>
-        <td><a href="/admin/community/{{ c.id }}" style="color:#eee;font-weight:500;">{{ c.name }}</a></td>
-        <td style="color:#666;">/c/{{ c.slug }}/</td>
-        <td>{{ c.owner_name }}</td>
-        <td>{{ c.member_count }}</td>
-        <td>{{ c.post_count }}</td>
-        <td>{{ c.comment_count }}</td>
-        <td>{{ c.created[:10] if c.created else '—' }}</td>
-        <td style="text-align:right;">
-          <div class="flex gap-8" style="justify-content:flex-end;">
-            <a href="/c/{{ c.slug }}/" class="btn btn-ghost btn-sm">Visit</a>
-            <a href="/admin/community/{{ c.id }}" class="btn btn-ghost btn-sm">Manage</a>
-            <form method="POST" action="/admin/community/{{ c.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete {{ c.name }} and all its content?')">
-              <button class="btn btn-danger btn-sm">Delete</button>
-            </form>
+      <div class="adm-community-row">
+        <div class="adm-community-icon">{{ c.name[0] | upper }}</div>
+        <div class="adm-community-info">
+          <a href="/admin/community/{{ c.id }}" class="adm-community-name">{{ c.name }}</a>
+          <div class="adm-community-slug">/c/{{ c.slug }}/</div>
+        </div>
+        <div class="adm-community-owner">{{ c.owner_name }}</div>
+        <div class="adm-community-metrics">
+          <div class="adm-metric">
+            <div class="adm-metric-val">{{ c.member_count }}</div>
+            <div class="adm-metric-lbl">members</div>
           </div>
-        </td>
-      </tr>
+          <div class="adm-metric">
+            <div class="adm-metric-val">{{ c.post_count }}</div>
+            <div class="adm-metric-lbl">posts</div>
+          </div>
+          <div class="adm-metric">
+            <div class="adm-metric-val">{{ c.comment_count }}</div>
+            <div class="adm-metric-lbl">comments</div>
+          </div>
+        </div>
+        <div class="adm-community-date">{{ c.created | timeago }}</div>
+        <div class="adm-community-actions">
+          <a href="/c/{{ c.slug }}/" class="adm-action-btn" title="Visit">&#8599;</a>
+          <a href="/admin/community/{{ c.id }}" class="adm-action-btn" title="Manage">&#9881;</a>
+          <form method="POST" action="/admin/community/{{ c.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete {{ c.name }}?')">
+            <button class="adm-action-btn adm-action-danger" title="Delete">&times;</button>
+          </form>
+        </div>
+      </div>
       {% endfor %}
-    </table>
+    </div>
   </div>
   {% endif %}
 </div>
