@@ -281,9 +281,19 @@ Also built:
 - Loading skeleton shimmer animation for lightbox
 - Seeded 8 realistic job listings
 
+Also built:
+- Keyboard shortcuts (J/K navigate, Enter opens lightbox)
+- Read state on posts (dimmed after clicking, persists in localStorage)
+- Back to top floating button
+- Invite codes for private communities (toggle + code in settings, enforced on join)
+- Dashboard empty state for new users with guided action cards
+- GDPR data export (/account/export downloads all data as JSON)
+- GDPR account deletion (/account/delete with cascading deletes)
+- Cookie consent banner (bottom bar, localStorage dismiss)
+
 Where we left off:
 - Resend API key still needs configuring for live emails
 - Admin login: haydn@revolv.uk
-- Next priorities: email digest, invite codes, moderation tools, custom categories admin, member roles/badges
+- Next priorities: email digest, moderation tools, custom categories admin, member roles/badges
 - Longer term: Stripe billing, PostgreSQL migration, Slack/Discord webhooks, OAuth login
-- app.py is now ~3,200 lines — should consider splitting into blueprints soon
+- app.py is now ~3,500 lines — should split into blueprints in next session
