@@ -22,7 +22,7 @@
           <span class="qa-avatar">{{ post.author_name[0] | upper }}</span>
           <a href="/c/{{ community.slug }}/members/{{ post.user_id }}" class="qa-author-name">{{ post.author_name }}</a>
           {% if flair %}<span class="qa-flair">{{ flair }}</span>{% endif %}
-          <span class="qa-date">{{ post.created[:10] }}</span>
+          <span class="qa-date">{{ post.created | timeago }}</span>
           {% if post.updated and post.updated != post.created %}
           <span class="qa-date">(edited)</span>
           {% endif %}
@@ -96,7 +96,7 @@
       <div class="cmt-right">
         <div class="cmt-header">
           <a href="/c/{{ community.slug }}/members/{{ c.user_id }}" class="qa-author-name">{{ c.author_name }}</a>
-          <span class="qa-date">{{ c.created[:10] }}</span>
+          <span class="qa-date">{{ c.created | timeago }}</span>
           {% if c.can_delete %}
           <form method="POST" action="/c/{{ community.slug }}/comments/{{ c.id }}/delete" style="display:inline;">
             <button class="qa-delete-btn">delete</button>

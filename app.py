@@ -111,6 +111,35 @@ def render_markdown(text):
 def markdown_filter(text):
     return render_markdown(text)
 
+@app.template_filter("timeago")
+def timeago_filter(dt_str):
+    """Convert ISO datetime string to relative time like '3h ago'."""
+    if not dt_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return dt_str[:10] if dt_str else ""
+    now = datetime.utcnow()
+    diff = now - dt
+    seconds = int(diff.total_seconds())
+    if seconds < 60:
+        return "just now"
+    elif seconds < 3600:
+        m = seconds // 60
+        return f"{m}m ago"
+    elif seconds < 86400:
+        h = seconds // 3600
+        return f"{h}h ago"
+    elif seconds < 604800:
+        d = seconds // 86400
+        return f"{d}d ago"
+    elif seconds < 2592000:
+        w = seconds // 604800
+        return f"{w}w ago"
+    else:
+        return dt_str[:10]
+
 # ── Email (Resend) ────────────────────────────────────────────────
 
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
@@ -478,6 +507,7 @@ def community_member_required(f):
             return redirect("/dashboard")
         g.community = community
         g.membership = membership
+        g.notif_count = get_unread_notification_count(session["user_id"], community["id"])
         return f(slug, *args, **kwargs)
     return decorated
 
@@ -1292,6 +1322,21 @@ def community_add_comment(slug, pid):
             VALUES (?, ?, ?, ?, ?, ?)
         """, (uid, community["id"], pid, "comment",
               f'{commenter["name"]} commented on "{post["title"]}"', now))
+
+    # @mentions — find @Name patterns and notify mentioned users
+    mentions = re.findall(r'@(\w[\w\s]{1,30}?)(?=\s|$|[.,!?])', body)
+    for mention_name in mentions:
+        mentioned = db.execute(
+            "SELECT u.id FROM users u JOIN memberships m ON u.id = m.user_id WHERE m.community_id = ? AND u.name LIKE ? AND u.id != ?",
+            (community["id"], mention_name.strip(), session["user_id"])
+        ).fetchone()
+        if mentioned and mentioned["id"] not in notify_ids:
+            db.execute("""
+                INSERT INTO notifications (user_id, community_id, post_id, type, message, created)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (mentioned["id"], community["id"], pid, "mention",
+                  f'{commenter["name"]} mentioned you in "{post["title"]}"', now))
+
     db.commit()
     return redirect(f"/c/{slug}/posts/{pid}")
 
@@ -2129,6 +2174,18 @@ def community_channel_delete(slug, channel, eid):
     db.commit()
     flash("Entry deleted.", "success")
     return redirect(f"/c/{slug}/channel/{channel}")
+
+@app.route("/c/<slug>/settings/announcement", methods=["POST"])
+@community_admin_required
+def community_update_announcement(slug):
+    db = get_db()
+    community = g.community
+    announcement = request.form.get("announcement", "").strip()
+    db.execute("UPDATE communities SET announcement = ? WHERE id = ?",
+               (announcement, community["id"]))
+    db.commit()
+    flash("Announcement updated." if announcement else "Announcement cleared.", "success")
+    return redirect(f"/c/{slug}/settings?tab=general")
 
 @app.route("/c/<slug>/settings/channels", methods=["POST"])
 @community_admin_required

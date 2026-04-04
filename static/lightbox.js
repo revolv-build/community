@@ -34,6 +34,19 @@
     return d.innerHTML;
   }
 
+  function timeago(iso) {
+    if (!iso) return '';
+    var now = Date.now();
+    var then = new Date(iso.replace(' ', 'T') + (iso.includes('Z') ? '' : 'Z')).getTime();
+    var diff = Math.floor((now - then) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+    if (diff < 2592000) return Math.floor(diff / 604800) + 'w ago';
+    return iso.substring(0, 10);
+  }
+
   // Build nested comment tree
   function buildTree(comments) {
     var map = {}, roots = [];
@@ -67,7 +80,7 @@
     h += '<div class="cmt-right">';
     h += '<div class="cmt-header">';
     h += '<a href="' + base + '/members/' + c.user_id + '" class="qa-author-name">' + esc(c.author_name) + '</a>';
-    h += '<span class="qa-date">' + c.created.slice(0, 10) + '</span>';
+    h += '<span class="qa-date">' + timeago(c.created) + '</span>';
     if (c.can_delete) h += '<form method="POST" action="' + base + '/comments/' + c.id + '/delete" style="display:inline"><button class="qa-delete-btn">delete</button></form>';
     h += '</div>';
     h += '<div class="cmt-body md-content">' + (c.body_html || esc(c.body)) + '</div>';
@@ -139,7 +152,7 @@
     h += '<span class="qa-avatar">' + esc(data.author_initial) + '</span>';
     h += '<a href="' + base + '/members/' + data.user_id + '" class="qa-author-name">' + esc(data.author_name) + '</a>';
     if (data.flair) h += '<span class="qa-flair">' + esc(data.flair) + '</span>';
-    h += '<span class="qa-date">' + data.created.slice(0, 10) + '</span>';
+    h += '<span class="qa-date">' + timeago(data.created) + '</span>';
     h += '</div>';
     if (data.is_owner || data.is_admin) {
       h += '<div class="flex gap-8">';

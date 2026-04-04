@@ -3,6 +3,19 @@
 {% block content %}
 <div class="page" style="max-width:1060px;">
 
+  {% if community.announcement %}
+  <div class="announce-bar">
+    <span class="announce-icon">📢</span>
+    <span class="announce-text">{{ community.announcement }}</span>
+    {% if membership.role in ('owner', 'admin') %}
+    <form method="POST" action="/c/{{ community.slug }}/settings/announcement" style="margin-left:auto;flex-shrink:0;">
+      <input type="hidden" name="announcement" value="" />
+      <button class="announce-dismiss" title="Clear announcement">&times;</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <!-- Banner -->
   <div class="community-banner" {% if community.banner_path %}style="background-image:url('/uploads/{{ community.banner_path }}')"{% endif %}>
     <div class="banner-overlay"></div>
@@ -97,7 +110,7 @@
                 {% endif %}
               </div>
               <div class="qa-actions">
-                <span class="qa-date">{{ post.created[:10] }}</span>
+                <span class="qa-date">{{ post.created | timeago }}</span>
                 <a href="/c/{{ community.slug }}/posts/{{ post.id }}" class="qa-action-btn" title="Comments">
                   <span class="qa-action-icon">💬</span> {{ post.comment_count }}
                 </a>

@@ -88,6 +88,17 @@
     </form>
   </div>
   <div class="card mb-24">
+    <h2>Announcement Banner</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Shows at the top of the community feed. Leave blank to hide.</p>
+    <form method="POST" action="/c/{{ community.slug }}/settings/announcement">
+      <div class="field">
+        <input name="announcement" value="{{ community.announcement or '' }}" placeholder="e.g. New workshop this Thursday! RSVP in Events." />
+      </div>
+      <button class="btn btn-primary">Update Announcement</button>
+    </form>
+  </div>
+
+  <div class="card mb-24">
     <h2>Welcome Message</h2>
     <p style="font-size:13px;color:#888;margin-bottom:12px;">Sent as a notification when new members join. Leave blank to disable.</p>
     <form method="POST" action="/c/{{ community.slug }}/settings/update" enctype="multipart/form-data">
