@@ -16,12 +16,16 @@
 <body data-slug="{{ community.slug }}">
   {% if current_user and current_user.is_admin and not session.get('impersonator_id') %}
   <div class="admin-bar">
-    <span class="admin-bar-label">ADMIN</span>
-    <a href="/admin">Dashboard</a>
-    <a href="/admin?tab=communities">Communities</a>
-    <a href="/admin?tab=users">Users</a>
-    <a href="/admin?tab=activity">Activity</a>
-    <a href="/admin/community/{{ community.id }}">Manage This Community</a>
+    <div class="ab-left">
+      <span class="ab-pulse"></span>
+      <span class="ab-label">ADMIN</span>
+      <a href="/admin" class="ab-link"><span class="ab-icon">&#9635;</span><span class="ab-text">Command Centre</span></a>
+      <a href="/admin?tab=communities" class="ab-link"><span class="ab-icon">&#9672;</span><span class="ab-text">Communities</span></a>
+      <a href="/admin?tab=users" class="ab-link"><span class="ab-icon">&#9673;</span><span class="ab-text">Users</span></a>
+    </div>
+    <div class="ab-right">
+      <a href="/admin/community/{{ community.id }}" class="ab-link ab-highlight"><span class="ab-icon">&#9881;</span><span class="ab-text">Manage This Community</span></a>
+    </div>
   </div>
   {% endif %}
 

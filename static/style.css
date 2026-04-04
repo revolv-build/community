@@ -748,7 +748,12 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
   nav .nav-links a { font-size: 12px; }
 
   /* Admin bar */
-  .admin-bar { padding: 0 12px; flex-wrap: wrap; gap: 8px; height: auto; padding: 6px 12px; }
+  .admin-bar { padding: 4px 10px; height: auto; flex-wrap: wrap; gap: 4px; }
+  .ab-text { display: none; }
+  .ab-link { padding: 4px 8px; }
+  .ab-icon { font-size: 14px; }
+  .ab-label { display: none; }
+  .ab-highlight .ab-text { display: inline; font-size: 10px; }
 
   /* Q&A layout — stack sidebar below feed */
   .qa-layout { flex-direction: column; }
@@ -830,10 +835,15 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 }
 
 /* ── Admin Bar ────────────────────────────────────────────────── */
-.admin-bar { background: #2a2200; border-bottom: 1px solid #4a3a00; padding: 0 32px; display: flex; align-items: center; gap: 20px; height: 36px; }
-.admin-bar-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: #c0a030; background: #3a3000; padding: 2px 8px; border-radius: 3px; border: 1px solid #4a3a00; }
-.admin-bar a { font-size: 12px; color: #a08820; transition: color .15s; }
-.admin-bar a:hover { color: #e0c040; }
+.admin-bar { background: linear-gradient(90deg, #1a1400 0%, #0a0a0a 50%, #0a0a14 100%); border-bottom: 1px solid #2a2200; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; height: 34px; }
+.ab-left, .ab-right { display: flex; align-items: center; gap: 4px; }
+.ab-pulse { width: 6px; height: 6px; background: #c0a040; border-radius: 50%; animation: pulse 2s ease-in-out infinite; margin-right: 6px; }
+.ab-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: #806020; margin-right: 8px; }
+.ab-link { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #706020; padding: 4px 10px; border-radius: 3px; transition: all .12s; }
+.ab-link:hover { color: #e0c040; background: rgba(192, 160, 64, 0.1); }
+.ab-icon { font-size: 12px; }
+.ab-highlight { color: #c0a040; border: 1px solid #3a3000; background: rgba(192, 160, 64, 0.06); }
+.ab-highlight:hover { background: rgba(192, 160, 64, 0.15); }
 
 /* ── Notification Badge ────────────────────────────────────────── */
 .notif-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; background: #e05050; color: #fff; font-size: 10px; font-weight: 700; border-radius: 9px; margin-left: auto; }
