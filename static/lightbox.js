@@ -70,7 +70,7 @@
     h += '<span class="qa-date">' + c.created.slice(0, 10) + '</span>';
     if (c.can_delete) h += '<form method="POST" action="' + base + '/comments/' + c.id + '/delete" style="display:inline"><button class="qa-delete-btn">delete</button></form>';
     h += '</div>';
-    h += '<div class="cmt-body">' + esc(c.body) + '</div>';
+    h += '<div class="cmt-body md-content">' + (c.body_html || esc(c.body)) + '</div>';
 
     // Awards display
     if (c.awards && c.awards.length > 0) {
@@ -147,9 +147,11 @@
       h += '<form method="POST" action="' + base + '/posts/' + data.id + '/delete" onsubmit="return confirm(\'Delete?\')"><button class="btn btn-danger btn-sm">Delete</button></form></div>';
     }
     h += '</div>';
+    if (data.is_pinned) h += '<span class="qa-pin-badge">Pinned</span> ';
     if (data.category) h += '<a href="' + base + '/?category=' + encodeURIComponent(data.category) + '" class="qa-cat-badge">' + esc(data.category) + '</a>';
     h += '<h1 class="qa-detail-title">' + esc(data.title) + '</h1>';
-    if (data.body) h += '<div class="post-body">' + esc(data.body) + '</div>';
+    if (data.body_html) h += '<div class="post-body md-content">' + data.body_html + '</div>';
+    else if (data.body) h += '<div class="post-body">' + esc(data.body) + '</div>';
     h += '<div class="qa-detail-actions">';
     h += '<form method="POST" action="' + base + '/posts/' + data.id + '/bookmark" class="qa-action-form"><button class="qa-action-btn-lg ' + (data.is_bookmarked ? 'qa-action-active' : '') + '">' + bookmarkIcon + ' ' + bookmarkLabel + '</button></form>';
     h += '<form method="POST" action="' + base + '/posts/' + data.id + '/follow" class="qa-action-form"><button class="qa-action-btn-lg ' + (data.is_following ? 'qa-action-active' : '') + '">' + followIcon + ' ' + followLabel + followCount + '</button></form>';

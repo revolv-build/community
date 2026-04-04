@@ -45,7 +45,7 @@
 
       <h1 class="qa-detail-title">{{ post.title }}</h1>
       {% if post.body %}
-      <div class="post-body">{{ post.body }}</div>
+      <div class="post-body md-content">{{ post.body | markdown }}</div>
       {% endif %}
 
       <!-- Action Bar -->
@@ -103,7 +103,7 @@
           </form>
           {% endif %}
         </div>
-        <div class="cmt-body">{{ c.body }}</div>
+        <div class="cmt-body md-content">{{ c.body | markdown }}</div>
         {% if c.awards %}
         <div class="cmt-awards">
           {% for a in c.awards %}

@@ -22,7 +22,7 @@
       </div>
       <div class="field">
         <div class="label">Body</div>
-        <textarea name="body" style="min-height:200px;" placeholder="Write your post...">{{ post.body if post else '' }}</textarea>
+        <textarea name="body" class="md-editor" style="min-height:200px;" placeholder="Write your post... (Markdown supported)">{{ post.body if post else '' }}</textarea>
       </div>
       <div class="flex gap-8">
         <button class="btn btn-primary">{{ 'Update' if post else 'Publish' }}</button>

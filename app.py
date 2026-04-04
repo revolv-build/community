@@ -31,7 +31,9 @@ from flask import (
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from markupsafe import escape
+from markupsafe import escape, Markup
+import markdown as md_lib
+import bleach
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
@@ -82,6 +84,32 @@ def set_security_headers(response):
     return response
 
 (APP_DIR / "data").mkdir(exist_ok=True)
+
+# ── Markdown Rendering ────────────────────────────────────────────
+
+ALLOWED_TAGS = [
+    "p", "br", "strong", "em", "a", "ul", "ol", "li", "code", "pre",
+    "blockquote", "h1", "h2", "h3", "h4", "img", "hr", "del", "table",
+    "thead", "tbody", "tr", "th", "td",
+]
+ALLOWED_ATTRS = {
+    "a": ["href", "title", "rel"],
+    "img": ["src", "alt", "title"],
+}
+
+def render_markdown(text):
+    """Convert Markdown to sanitised HTML."""
+    if not text:
+        return ""
+    raw_html = md_lib.markdown(text, extensions=["fenced_code", "tables", "nl2br"])
+    clean = bleach.clean(raw_html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+    # Make links open in new tab
+    clean = clean.replace("<a ", '<a target="_blank" rel="noopener" ')
+    return Markup(clean)
+
+@app.template_filter("markdown")
+def markdown_filter(text):
+    return render_markdown(text)
 
 # ── Email (Resend) ────────────────────────────────────────────────
 
@@ -165,6 +193,7 @@ def init_db():
             slug          TEXT NOT NULL UNIQUE,
             description   TEXT DEFAULT '',
             owner_id      INTEGER NOT NULL,
+            welcome_message TEXT DEFAULT '',
             created       TEXT NOT NULL,
             FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -187,6 +216,7 @@ def init_db():
             title         TEXT NOT NULL,
             body          TEXT DEFAULT '',
             category      TEXT DEFAULT '',
+            is_pinned     INTEGER NOT NULL DEFAULT 0,
             created       TEXT NOT NULL,
             updated       TEXT NOT NULL,
             FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
@@ -735,10 +765,18 @@ def join_community(slug):
         return redirect(f"/c/{slug}/")
     if request.method == "POST":
         db = get_db()
+        now = datetime.utcnow().isoformat()
         db.execute(
             "INSERT INTO memberships (user_id, community_id, role, joined) VALUES (?, ?, ?, ?)",
-            (session["user_id"], community["id"], "member", datetime.utcnow().isoformat())
+            (session["user_id"], community["id"], "member", now)
         )
+        # Send welcome notification if community has a welcome message
+        if community["welcome_message"]:
+            db.execute("""
+                INSERT INTO notifications (user_id, community_id, post_id, type, message, created)
+                VALUES (?, ?, NULL, ?, ?, ?)
+            """, (session["user_id"], community["id"], "welcome",
+                  community["welcome_message"], now))
         db.commit()
         flash(f"Welcome to {community['name']}!", "success")
         return redirect(f"/c/{slug}/")
@@ -811,11 +849,11 @@ def community_feed(slug):
     category = request.args.get("category", "")
     q = request.args.get("q", "").strip()
 
-    order = "p.created DESC"
+    order = "p.is_pinned DESC, p.created DESC"
     if sort == "top":
-        order = "vote_score DESC, p.created DESC"
+        order = "p.is_pinned DESC, vote_score DESC, p.created DESC"
     elif sort == "discussed":
-        order = "comment_count DESC, p.created DESC"
+        order = "p.is_pinned DESC, comment_count DESC, p.created DESC"
 
     where = "p.community_id = ?"
     params = [community["id"]]
@@ -1069,6 +1107,7 @@ def community_post_json(slug, pid):
         ma = my_awards.get(cid, set())
         comments_out.append({
             "id": cid, "user_id": c["user_id"], "body": c["body"],
+            "body_html": str(render_markdown(c["body"])),
             "parent_id": c["parent_id"], "created": c["created"],
             "author_name": c["author_name"],
             "author_initial": c["author_name"][0].upper(),
@@ -1081,6 +1120,8 @@ def community_post_json(slug, pid):
 
     return {
         "id": post["id"], "title": post["title"], "body": post["body"],
+        "body_html": str(render_markdown(post["body"])),
+        "is_pinned": bool(post["is_pinned"]) if "is_pinned" in post.keys() else False,
         "category": post["category"] or "", "created": post["created"],
         "updated": post["updated"], "user_id": post["user_id"],
         "author_name": post["author_name"],
@@ -1138,6 +1179,23 @@ def community_delete_post(slug, pid):
     db.commit()
     flash("Post deleted.", "success")
     return redirect(f"/c/{slug}/")
+
+@app.route("/c/<slug>/posts/<int:pid>/pin", methods=["POST"])
+@community_admin_required
+def community_pin_post(slug, pid):
+    db = get_db()
+    community = g.community
+    post = db.execute("SELECT is_pinned FROM posts WHERE id = ? AND community_id = ?",
+                      (pid, community["id"])).fetchone()
+    if not post:
+        flash("Post not found.", "error")
+        return redirect(f"/c/{slug}/")
+    new_val = 0 if post["is_pinned"] else 1
+    db.execute("UPDATE posts SET is_pinned = ? WHERE id = ?", (new_val, pid))
+    db.commit()
+    flash(f"Post {'pinned' if new_val else 'unpinned'}.", "success")
+    referrer = request.referrer or f"/c/{slug}/"
+    return redirect(referrer)
 
 @app.route("/c/<slug>/posts/<int:pid>/vote", methods=["POST"])
 @community_member_required
@@ -1890,8 +1948,9 @@ def community_update_settings(slug):
             db.execute("UPDATE communities SET banner_path=? WHERE id=?",
                        (f"banners/{banner_name}", community["id"]))
 
-    db.execute("UPDATE communities SET name=?, description=? WHERE id=?",
-               (name, description, community["id"]))
+    welcome_message = request.form.get("welcome_message", "").strip()
+    db.execute("UPDATE communities SET name=?, description=?, welcome_message=? WHERE id=?",
+               (name, description, welcome_message, community["id"]))
     db.commit()
     flash("Settings updated.", "success")
     return redirect(f"/c/{slug}/settings?tab=general")

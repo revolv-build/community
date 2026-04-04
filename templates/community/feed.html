@@ -78,6 +78,9 @@
             </form>
           </div>
           <div class="qa-content">
+            {% if post.is_pinned %}
+            <span class="qa-pin-badge">Pinned</span>
+            {% endif %}
             {% if post.category %}
             <a href="/c/{{ community.slug }}/?category={{ post.category }}" class="qa-cat-badge">{{ post.category }}</a>
             {% endif %}
@@ -111,6 +114,11 @@
                 <button class="qa-action-btn" title="Copy link" onclick="navigator.clipboard.writeText(window.location.origin+'/c/{{ community.slug }}/posts/{{ post.id }}');this.innerHTML='<span class=qa-action-icon>✓</span>';setTimeout(()=>this.innerHTML='<span class=qa-action-icon>↗</span>',1500)">
                   <span class="qa-action-icon">↗</span>
                 </button>
+                {% if membership.role in ('owner', 'admin') %}
+                <form method="POST" action="/c/{{ community.slug }}/posts/{{ post.id }}/pin" class="qa-action-form">
+                  <button class="qa-action-btn {{ 'qa-action-active' if post.is_pinned else '' }}" title="{{ 'Unpin' if post.is_pinned else 'Pin' }}">📌</button>
+                </form>
+                {% endif %}
               </div>
             </div>
           </div>

@@ -134,6 +134,41 @@ tr:last-child td { border-bottom: none; }
 .qa-comments { font-size: 12px; color: #555; display: flex; align-items: center; gap: 4px; }
 .qa-comments:hover { color: #ccc; }
 .qa-comment-icon { font-size: 13px; }
+/* Pin badge */
+.qa-pin-badge { display: inline-block; padding: 2px 8px; font-size: 10px; font-weight: 600; letter-spacing: .3px; color: #e05050; background: #2a0d0d; border: 1px solid #3a2020; border-radius: 2px; margin-bottom: 4px; text-transform: uppercase; }
+
+/* Markdown rendered content */
+.md-content { font-size: 14px; color: #ccc; line-height: 1.7; }
+.md-content p { margin-bottom: 12px; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content strong { color: #eee; }
+.md-content a { color: #7070e0; }
+.md-content a:hover { color: #9090ff; }
+.md-content ul, .md-content ol { margin: 8px 0 12px 20px; }
+.md-content li { margin-bottom: 4px; }
+.md-content code { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 3px; padding: 1px 6px; font-size: 13px; color: #e0a040; }
+.md-content pre { background: #0a0a0a; border: 1px solid #1e1e1e; border-radius: 4px; padding: 14px; margin: 12px 0; overflow-x: auto; }
+.md-content pre code { background: none; border: none; padding: 0; color: #ccc; }
+.md-content blockquote { border-left: 3px solid #2a2a4a; margin: 12px 0; padding: 8px 16px; color: #999; }
+.md-content img { max-width: 100%; border-radius: 4px; margin: 8px 0; }
+.md-content h1, .md-content h2, .md-content h3 { color: #fff; margin: 16px 0 8px; }
+.md-content h1 { font-size: 20px; }
+.md-content h2 { font-size: 17px; }
+.md-content h3 { font-size: 15px; }
+.md-content hr { border: none; border-top: 1px solid #1e1e1e; margin: 16px 0; }
+.md-content table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+.md-content th, .md-content td { border: 1px solid #1e1e1e; padding: 8px 12px; text-align: left; }
+.md-content th { background: #111; color: #eee; }
+
+/* EasyMDE dark theme overrides */
+.EasyMDEContainer .CodeMirror { background: #1a1a1a !important; color: #ccc !important; border-color: #2a2a2a !important; }
+.EasyMDEContainer .editor-toolbar { background: #111 !important; border-color: #2a2a2a !important; }
+.EasyMDEContainer .editor-toolbar button { color: #888 !important; }
+.EasyMDEContainer .editor-toolbar button:hover { background: #1a1a1a !important; color: #fff !important; }
+.EasyMDEContainer .editor-toolbar button.active { background: #1a1a2a !important; color: #7070e0 !important; }
+.EasyMDEContainer .editor-preview { background: #111 !important; color: #ccc !important; }
+.EasyMDEContainer .CodeMirror-cursor { border-color: #ccc !important; }
+
 .qa-empty { text-align: center; padding: 48px 24px; color: #444; font-size: 13px; border: 1px solid #1e1e1e; background: #111; border-radius: 2px; }
 
 /* Q&A Layout (feed + sidebar) */
