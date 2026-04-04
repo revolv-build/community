@@ -17,6 +17,8 @@ import re
 import sqlite3
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -81,6 +83,48 @@ def set_security_headers(response):
 
 (APP_DIR / "data").mkdir(exist_ok=True)
 
+# ── Email (Resend) ────────────────────────────────────────────────
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "Community <noreply@revolv.uk>")
+
+def send_email(to, subject, html_body):
+    """Send email via Resend API. Returns True on success."""
+    if not RESEND_API_KEY:
+        print(f"[EMAIL SKIPPED — no API key] To: {to}, Subject: {subject}")
+        return False
+    payload = json.dumps({
+        "from": EMAIL_FROM,
+        "to": [to],
+        "subject": subject,
+        "html": html_body
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status == 200
+    except urllib.error.URLError as e:
+        print(f"[EMAIL ERROR] {e}")
+        return False
+
+# Token generation for password reset and email verification
+from itsdangerous import URLSafeTimedSerializer
+_serializer = URLSafeTimedSerializer(app.secret_key)
+
+def generate_token(data, salt="default"):
+    return _serializer.dumps(data, salt=salt)
+
+def verify_token(token, salt="default", max_age=3600):
+    try:
+        return _serializer.loads(token, salt=salt, max_age=max_age)
+    except Exception:
+        return None
+
 # ── Database ──────────────────────────────────────────────────────
 
 def get_db():
@@ -108,6 +152,7 @@ def init_db():
             email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
             password_hash TEXT NOT NULL,
             is_admin      INTEGER NOT NULL DEFAULT 0,
+            email_verified INTEGER NOT NULL DEFAULT 0,
             bio           TEXT DEFAULT '',
             location      TEXT DEFAULT '',
             website       TEXT DEFAULT '',
@@ -509,7 +554,24 @@ def register_page():
             db.commit()
             user = get_user_by_email(email)
             login_user(user)
-            flash("Welcome! Create your first community or join one.", "success")
+            # Send verification email
+            token = generate_token(user["id"], salt="email-verify")
+            verify_url = request.host_url.rstrip("/") + f"/verify-email/{token}"
+            send_email(
+                to=email,
+                subject="Verify your email - Community",
+                html_body=f"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
+                    <h2 style="color:#333;">Welcome to Community!</h2>
+                    <p style="color:#666;">Hi {name},</p>
+                    <p style="color:#666;">Please verify your email address to get full access.</p>
+                    <p style="margin:24px 0;">
+                        <a href="{verify_url}" style="background:#000;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:500;">Verify Email</a>
+                    </p>
+                </div>
+                """
+            )
+            flash("Welcome! Check your email to verify your account.", "success")
             return redirect("/dashboard")
     return render_template("register.html", err=err, name=name, email=email, form_ts=form_ts)
 
@@ -517,6 +579,105 @@ def register_page():
 def logout():
     session.clear()
     return redirect("/")
+
+# ── Password Reset ───────────────────────────────────────────────
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("3 per minute", methods=["POST"])
+def forgot_password():
+    sent = False
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        user = get_user_by_email(email)
+        if user:
+            token = generate_token(user["id"], salt="password-reset")
+            reset_url = request.host_url.rstrip("/") + f"/reset-password/{token}"
+            send_email(
+                to=user["email"],
+                subject="Reset your password",
+                html_body=f"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
+                    <h2 style="color:#333;">Reset your password</h2>
+                    <p style="color:#666;">Hi {user['name']},</p>
+                    <p style="color:#666;">Click the button below to reset your password. This link expires in 1 hour.</p>
+                    <p style="margin:24px 0;">
+                        <a href="{reset_url}" style="background:#000;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:500;">Reset Password</a>
+                    </p>
+                    <p style="color:#999;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+                </div>
+                """
+            )
+        # Always show success to avoid email enumeration
+        sent = True
+    return render_template("forgot_password.html", sent=sent)
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    user_id = verify_token(token, salt="password-reset", max_age=3600)
+    if not user_id:
+        flash("This reset link has expired or is invalid.", "error")
+        return redirect("/forgot-password")
+    user = get_user_by_id(user_id)
+    if not user:
+        flash("User not found.", "error")
+        return redirect("/forgot-password")
+    err = None
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+        if len(password) < 8:
+            err = "Password must be at least 8 characters."
+        elif password != password_confirm:
+            err = "Passwords do not match."
+        else:
+            db = get_db()
+            db.execute("UPDATE users SET password_hash = ? WHERE id = ?",
+                       (generate_password_hash(password), user_id))
+            db.commit()
+            flash("Password updated! You can now log in.", "success")
+            return redirect("/login")
+    return render_template("reset_password.html", err=err, token=token)
+
+# ── Email Verification ───────────────────────────────────────────
+
+@app.route("/verify-email/<token>")
+def verify_email(token):
+    user_id = verify_token(token, salt="email-verify", max_age=86400)  # 24 hours
+    if not user_id:
+        flash("This verification link has expired or is invalid.", "error")
+        return redirect("/login")
+    db = get_db()
+    db.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+    db.commit()
+    flash("Email verified! Welcome to the community.", "success")
+    if session.get("user_id"):
+        return redirect("/dashboard")
+    return redirect("/login")
+
+@app.route("/resend-verification", methods=["POST"])
+@login_required
+@limiter.limit("2 per minute")
+def resend_verification():
+    user = get_user_by_id(session["user_id"])
+    if user and not user["email_verified"]:
+        token = generate_token(user["id"], salt="email-verify")
+        verify_url = request.host_url.rstrip("/") + f"/verify-email/{token}"
+        send_email(
+            to=user["email"],
+            subject="Verify your email",
+            html_body=f"""
+            <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px;">
+                <h2 style="color:#333;">Verify your email</h2>
+                <p style="color:#666;">Hi {user['name']},</p>
+                <p style="color:#666;">Click the button below to verify your email address.</p>
+                <p style="margin:24px 0;">
+                    <a href="{verify_url}" style="background:#000;color:#fff;padding:12px 24px;border-radius:4px;text-decoration:none;font-weight:500;">Verify Email</a>
+                </p>
+            </div>
+            """
+        )
+        flash("Verification email sent! Check your inbox.", "success")
+    return redirect("/dashboard")
 
 # ── Platform: Dashboard ──────────────────────────────────────────
 

@@ -644,5 +644,8 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 .admin-bar a { font-size: 12px; color: #a08820; transition: color .15s; }
 .admin-bar a:hover { color: #e0c040; }
 
+/* ── Verify Banner ────────────────────────────────────────────── */
+.verify-banner { background: #1a1400; border: 1px solid #3a3000; border-radius: 2px; padding: 12px 16px; font-size: 13px; color: #c0a040; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
 /* ── Impersonate Banner ───────────────────────────────────────── */
 .impersonate-banner { background: #2a2a1a; border-bottom: 1px solid #4a4a2a; color: #c0a040; font-size: 13px; padding: 8px 32px; display: flex; align-items: center; justify-content: center; }

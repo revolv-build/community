@@ -2,6 +2,15 @@
 {% block title %}Dashboard - Community{% endblock %}
 {% block content %}
 <div class="page">
+  {% if current_user and not current_user.email_verified %}
+  <div class="verify-banner mb-16">
+    <span>Please verify your email address ({{ current_user.email }}) to get full access.</span>
+    <form method="POST" action="/resend-verification" style="display:inline;">
+      <button class="btn btn-primary btn-sm" style="margin-left:12px;">Resend Verification Email</button>
+    </form>
+  </div>
+  {% endif %}
+
   <div class="flex-between mb-24">
     <div>
       <h1>Your Communities</h1>
