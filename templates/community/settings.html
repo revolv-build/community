@@ -121,7 +121,7 @@
     <h2>Content Channels</h2>
     <p style="font-size:13px;color:#888;margin-bottom:12px;">Enable or disable content sections for your community.</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      {% for key, ch in [('blog', 'Blog'), ('podcasts', 'Podcasts'), ('news', 'News'), ('newsletter', 'Newsletter')] %}
+      {% for key, ch in [('blog', 'Blog'), ('podcasts', 'Podcasts'), ('news', 'News'), ('newsletter', 'Newsletter'), ('jobs', 'Job Board')] %}
       <form method="POST" action="/c/{{ community.slug }}/settings/channels">
         <input type="hidden" name="channel" value="{{ key }}" />
         <button class="ch-toggle-btn {{ 'ch-toggle-on' if community['channel_' ~ key] else '' }}">

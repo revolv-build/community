@@ -75,6 +75,11 @@
         <a href="/c/{{ community.slug }}/insights" class="sidebar-link {% if '/insights' in request.path %}active{% endif %}">
           <span class="sidebar-icon">&#9733;</span> Insights
         </a>
+        {% if community.channel_jobs %}
+        <a href="/c/{{ community.slug }}/jobs" class="sidebar-link {% if '/jobs' in request.path %}active{% endif %}">
+          <span class="sidebar-icon">&#9881;</span> Jobs
+        </a>
+        {% endif %}
       </div>
 
       {% if community.channel_podcasts or community.channel_news or community.channel_blog or community.channel_newsletter %}

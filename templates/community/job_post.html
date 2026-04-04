@@ -1,0 +1,79 @@
+{% extends "community/base.html" %}
+{% block title %}Post a Job - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page-mid">
+  <div style="margin-bottom:12px;">
+    <a href="/c/{{ community.slug }}/jobs" style="font-size:12px;color:#7070e0;">← Back to Job Board</a>
+  </div>
+  <h1>Post a Job</h1>
+  <div class="sub">List a position for the {{ community.name }} community</div>
+
+  <form method="POST">
+    <div class="card mb-16">
+      <h2>Company Details</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field"><div class="label">Company Name</div><input name="company" required placeholder="e.g. Acme Inc." /></div>
+        <div class="field"><div class="label">Company Website</div><input name="company_url" placeholder="https://..." /></div>
+      </div>
+      <div class="field"><div class="label">Company Logo URL</div><input name="company_logo" placeholder="https://... (square image recommended)" /></div>
+    </div>
+
+    <div class="card mb-16">
+      <h2>Job Details</h2>
+      <div class="field"><div class="label">Job Title</div><input name="title" required placeholder="e.g. Senior Content Marketing Manager" /></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div class="field">
+          <div class="label">Type</div>
+          <select name="job_type">
+            {% for t in job_types %}<option value="{{ t }}">{{ t | title }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <div class="label">Remote</div>
+          <select name="remote_type">
+            {% for r in job_remotes %}<option value="{{ r }}">{{ r | title }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <div class="label">Category</div>
+          <select name="category">
+            <option value="">Select...</option>
+            {% for c in job_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="field"><div class="label">Location</div><input name="location" placeholder="e.g. London, UK or Anywhere" /></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+        <div class="field"><div class="label">Salary Min</div><input name="salary_min" type="number" placeholder="e.g. 80000" /></div>
+        <div class="field"><div class="label">Salary Max</div><input name="salary_max" type="number" placeholder="e.g. 120000" /></div>
+        <div class="field">
+          <div class="label">Currency</div>
+          <select name="salary_currency">
+            <option value="USD">USD</option>
+            <option value="GBP">GBP</option>
+            <option value="EUR">EUR</option>
+            <option value="CAD">CAD</option>
+            <option value="AUD">AUD</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field"><div class="label">Job Description</div><textarea name="description" class="md-editor" style="min-height:250px;" placeholder="Describe the role, responsibilities, requirements... (Markdown supported)"></textarea></div>
+      <div class="field"><div class="label">Apply URL</div><input name="apply_url" placeholder="https://... (link to application form)" /></div>
+    </div>
+
+    <div class="card mb-16">
+      <h2>Visibility</h2>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#ccc;cursor:pointer;">
+        <input name="featured" type="checkbox" value="1" style="width:auto;accent-color:#5adb8a;" />
+        Feature this job (highlighted at the top of the board)
+      </label>
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:14px;font-size:15px;">Publish Job</button>
+  </form>
+</div>
+{% endblock %}

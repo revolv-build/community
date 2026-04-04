@@ -1,0 +1,122 @@
+{% extends "community/base.html" %}
+{% block title %}Jobs - {{ community.name }}{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1100px;">
+  <div class="flex-between mb-16">
+    <div>
+      <h1>Job Board</h1>
+      <div class="sub" style="margin-bottom:0;">{{ jobs | length }} open position{{ 's' if jobs | length != 1 else '' }} in the community</div>
+    </div>
+    {% if membership.role in ('owner', 'admin') %}
+    <a href="/c/{{ community.slug }}/jobs/post" class="btn btn-primary">Post a Job</a>
+    {% endif %}
+  </div>
+
+  <div class="jb-layout">
+    <!-- Filters Sidebar -->
+    <aside class="jb-filters">
+      <form method="GET">
+        <div class="jb-filter-section">
+          <div class="label">Search</div>
+          <input name="q" value="{{ q }}" placeholder="Company, title, keyword..." />
+        </div>
+
+        <div class="jb-filter-section">
+          <div class="label">Location</div>
+          <select name="location">
+            <option value="">All locations</option>
+            {% for loc in locations %}
+            <option value="{{ loc }}" {{ 'selected' if location == loc else '' }}>{{ loc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="jb-filter-section">
+          <div class="label">Remote</div>
+          <select name="remote">
+            <option value="">Any</option>
+            {% for r in job_remotes %}
+            <option value="{{ r }}" {{ 'selected' if remote == r else '' }}>{{ r | title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="jb-filter-section">
+          <div class="label">Type</div>
+          <select name="type">
+            <option value="">All types</option>
+            {% for t in job_types %}
+            <option value="{{ t }}" {{ 'selected' if job_type == t else '' }}>{{ t | title }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="jb-filter-section">
+          <div class="label">Category</div>
+          <select name="category">
+            <option value="">All categories</option>
+            {% for c in categories_used %}
+            <option value="{{ c }}" {{ 'selected' if category == c else '' }}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="jb-filter-section">
+          <div class="label">Min Salary</div>
+          <input name="salary_min" type="number" value="{{ salary_min }}" placeholder="e.g. 80000" />
+        </div>
+
+        <div class="jb-filter-section">
+          <div class="label">Sort</div>
+          <select name="sort">
+            <option value="newest" {{ 'selected' if sort == 'newest' else '' }}>Newest first</option>
+            <option value="salary" {{ 'selected' if sort == 'salary' else '' }}>Highest salary</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;">Filter</button>
+        {% if q or location or job_type or remote or category or salary_min %}
+        <a href="/c/{{ community.slug }}/jobs" class="btn btn-ghost" style="width:100%;justify-content:center;margin-top:6px;">Clear Filters</a>
+        {% endif %}
+      </form>
+    </aside>
+
+    <!-- Job List -->
+    <div class="jb-list">
+      {% if jobs %}
+        {% for job in jobs %}
+        <a href="/c/{{ community.slug }}/jobs/{{ job.id }}" class="jb-card {{ 'jb-featured' if job.featured else '' }}">
+          <div class="jb-card-logo">
+            {% if job.company_logo %}
+            <img src="{{ job.company_logo }}" alt="{{ job.company }}" />
+            {% else %}
+            <span class="jb-logo-fallback">{{ job.company[0] | upper }}</span>
+            {% endif %}
+          </div>
+          <div class="jb-card-body">
+            <div class="jb-card-title">{{ job.title }}</div>
+            <div class="jb-card-company">{{ job.company }}{% if job.featured %} <span class="jb-featured-badge">Featured</span>{% endif %}</div>
+            <div class="jb-card-meta">
+              {% if job.location %}<span>{{ job.location }}</span>{% endif %}
+              <span class="jb-tag">{{ job.remote_type | title }}</span>
+              <span class="jb-tag">{{ job.job_type | title }}</span>
+              {% if job.category %}<span class="jb-tag jb-tag-cat">{{ job.category }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="jb-card-right">
+            {% if job.salary_max > 0 %}
+            <div class="jb-salary">
+              {% if job.salary_min > 0 %}{{ job.salary_currency }} {{ '{:,}'.format(job.salary_min) }}–{{ '{:,}'.format(job.salary_max) }}{% else %}Up to {{ job.salary_currency }} {{ '{:,}'.format(job.salary_max) }}{% endif %}
+            </div>
+            {% endif %}
+            <div class="jb-posted">{{ job.created | timeago }}</div>
+          </div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="qa-empty">No jobs match your filters.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -2286,6 +2286,154 @@ def community_invite_member(slug):
     flash(f"{user['name']} added to the community.", "success")
     return redirect(f"/c/{slug}/settings?tab=members")
 
+# ── Community: Job Board ─────────────────────────────────────────
+
+JOB_TYPES = ["full-time", "part-time", "contract", "freelance", "internship"]
+JOB_REMOTE = ["on-site", "remote", "hybrid"]
+JOB_CATEGORIES = ["Marketing", "Engineering", "Design", "Sales", "Product", "Operations", "Content", "Data", "Finance", "HR", "Other"]
+
+@app.route("/c/<slug>/jobs")
+@community_member_required
+def community_jobs(slug):
+    db = get_db()
+    community = g.community
+    if not community["channel_jobs"]:
+        flash("Job board is not enabled.", "error")
+        return redirect(f"/c/{slug}/")
+
+    # Filters
+    q = request.args.get("q", "").strip()
+    location = request.args.get("location", "").strip()
+    job_type = request.args.get("type", "")
+    remote = request.args.get("remote", "")
+    category = request.args.get("category", "")
+    sort = request.args.get("sort", "newest")
+    salary_min = request.args.get("salary_min", "")
+
+    where = "j.community_id = ? AND j.status = 'active'"
+    params = [community["id"]]
+
+    if q:
+        where += " AND (j.title LIKE ? OR j.company LIKE ? OR j.description LIKE ?)"
+        params += [f"%{q}%", f"%{q}%", f"%{q}%"]
+    if location:
+        where += " AND j.location LIKE ?"
+        params.append(f"%{location}%")
+    if job_type:
+        where += " AND j.job_type = ?"
+        params.append(job_type)
+    if remote:
+        where += " AND j.remote_type = ?"
+        params.append(remote)
+    if category:
+        where += " AND j.category = ?"
+        params.append(category)
+    if salary_min:
+        where += " AND j.salary_max >= ?"
+        params.append(int(salary_min))
+
+    order = "j.featured DESC, j.created DESC"
+    if sort == "salary":
+        order = "j.featured DESC, j.salary_max DESC, j.created DESC"
+
+    jobs = db.execute(f"""
+        SELECT j.*, u.name AS poster_name
+        FROM jobs j JOIN users u ON j.user_id = u.id
+        WHERE {where} ORDER BY {order}
+    """, params).fetchall()
+
+    # Get unique locations and categories for filters
+    locations = db.execute(
+        "SELECT DISTINCT location FROM jobs WHERE community_id = ? AND status = 'active' AND location != '' ORDER BY location",
+        (community["id"],)
+    ).fetchall()
+    categories_used = db.execute(
+        "SELECT DISTINCT category FROM jobs WHERE community_id = ? AND status = 'active' AND category != '' ORDER BY category",
+        (community["id"],)
+    ).fetchall()
+
+    return render_template("community/jobs.html", community=community,
+                           membership=g.membership, jobs=jobs,
+                           q=q, location=location, job_type=job_type,
+                           remote=remote, category=category, sort=sort,
+                           salary_min=salary_min,
+                           locations=[r["location"] for r in locations],
+                           categories_used=[r["category"] for r in categories_used],
+                           job_types=JOB_TYPES, job_remotes=JOB_REMOTE,
+                           job_categories=JOB_CATEGORIES)
+
+@app.route("/c/<slug>/jobs/<int:jid>")
+@community_member_required
+def community_job_detail(slug, jid):
+    db = get_db()
+    community = g.community
+    job = db.execute("""
+        SELECT j.*, u.name AS poster_name
+        FROM jobs j JOIN users u ON j.user_id = u.id
+        WHERE j.id = ? AND j.community_id = ?
+    """, (jid, community["id"])).fetchone()
+    if not job:
+        flash("Job not found.", "error")
+        return redirect(f"/c/{slug}/jobs")
+    other_jobs = db.execute("""
+        SELECT id, title, company, location FROM jobs
+        WHERE community_id = ? AND status = 'active' AND id != ?
+        ORDER BY created DESC LIMIT 5
+    """, (community["id"], jid)).fetchall()
+    return render_template("community/job_detail.html", community=community,
+                           membership=g.membership, job=job, other_jobs=other_jobs)
+
+@app.route("/c/<slug>/jobs/post", methods=["GET", "POST"])
+@community_admin_required
+def community_post_job(slug):
+    community = g.community
+    if request.method == "POST":
+        db = get_db()
+        title = request.form.get("title", "").strip()
+        company = request.form.get("company", "").strip()
+        company_logo = request.form.get("company_logo", "").strip()
+        company_url = request.form.get("company_url", "").strip()
+        location = request.form.get("location", "").strip()
+        remote_type = request.form.get("remote_type", "on-site")
+        job_type = request.form.get("job_type", "full-time")
+        category = request.form.get("category", "")
+        salary_min = int(request.form.get("salary_min", 0) or 0)
+        salary_max = int(request.form.get("salary_max", 0) or 0)
+        salary_currency = request.form.get("salary_currency", "USD")
+        description = request.form.get("description", "").strip()
+        apply_url = request.form.get("apply_url", "").strip()
+        featured = 1 if request.form.get("featured") else 0
+
+        if not title or not company:
+            flash("Title and company are required.", "error")
+            return redirect(f"/c/{slug}/jobs/post")
+
+        db.execute("""
+            INSERT INTO jobs (community_id, user_id, title, company, company_logo, company_url,
+                              location, remote_type, job_type, category, salary_min, salary_max,
+                              salary_currency, description, apply_url, featured, created)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (community["id"], session["user_id"], title, company, company_logo, company_url,
+              location, remote_type, job_type, category, salary_min, salary_max,
+              salary_currency, description, apply_url, featured,
+              datetime.utcnow().isoformat()))
+        db.commit()
+        flash("Job posted!", "success")
+        return redirect(f"/c/{slug}/jobs")
+
+    return render_template("community/job_post.html", community=community,
+                           membership=g.membership, job_types=JOB_TYPES,
+                           job_remotes=JOB_REMOTE, job_categories=JOB_CATEGORIES)
+
+@app.route("/c/<slug>/jobs/<int:jid>/delete", methods=["POST"])
+@community_admin_required
+def community_delete_job(slug, jid):
+    db = get_db()
+    db.execute("DELETE FROM jobs WHERE id = ? AND community_id = ?", (jid, g.community["id"]))
+    db.commit()
+    flash("Job removed.", "success")
+    return redirect(f"/c/{slug}/jobs")
+
 # ── Community: Content Channels ──────────────────────────────────
 
 CHANNELS = {
@@ -2293,6 +2441,7 @@ CHANNELS = {
     "news":       {"label": "News", "icon": "📰", "flag": "channel_news", "desc": "Latest updates and announcements"},
     "blog":       {"label": "Blog", "icon": "✍️", "flag": "channel_blog", "desc": "Articles and long-form content"},
     "newsletter": {"label": "Newsletter", "icon": "📧", "flag": "channel_newsletter", "desc": "Regular updates delivered to you"},
+    "jobs":       {"label": "Job Board", "icon": "💼", "flag": "channel_jobs", "desc": "Career opportunities from the community"},
 }
 
 @app.route("/c/<slug>/channel/<channel>")

@@ -1,0 +1,133 @@
+{% extends "community/base.html" %}
+{% block title %}{{ job.title }} at {{ job.company }} - Jobs{% endblock %}
+{% block content %}
+<div class="page" style="max-width:1060px;">
+  <div style="margin-bottom:12px;">
+    <a href="/c/{{ community.slug }}/jobs" style="font-size:12px;color:#7070e0;">← Back to Job Board</a>
+  </div>
+
+  <div class="ch-layout">
+    <div class="ch-main">
+      <div class="card">
+        <!-- Header -->
+        <div class="jb-detail-header">
+          <div class="jb-detail-logo">
+            {% if job.company_logo %}
+            <img src="{{ job.company_logo }}" alt="{{ job.company }}" />
+            {% else %}
+            <span class="jb-logo-fallback" style="width:56px;height:56px;font-size:22px;">{{ job.company[0] | upper }}</span>
+            {% endif %}
+          </div>
+          <div>
+            {% if job.featured %}<span class="jb-featured-badge" style="margin-bottom:4px;display:inline-block;">Featured</span>{% endif %}
+            <h1 style="margin-bottom:4px;">{{ job.title }}</h1>
+            <div class="jb-detail-company">
+              {{ job.company }}
+              {% if job.company_url %}
+              <a href="{{ job.company_url }}" target="_blank" rel="noopener" style="color:#7070e0;margin-left:8px;">Website ↗</a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Info Grid -->
+        <div class="jb-detail-grid">
+          {% if job.location %}
+          <div class="jb-detail-item">
+            <div class="label">Location</div>
+            <div>{{ job.location }}</div>
+          </div>
+          {% endif %}
+          <div class="jb-detail-item">
+            <div class="label">Remote</div>
+            <span class="jb-tag">{{ job.remote_type | title }}</span>
+          </div>
+          <div class="jb-detail-item">
+            <div class="label">Type</div>
+            <span class="jb-tag">{{ job.job_type | title }}</span>
+          </div>
+          {% if job.category %}
+          <div class="jb-detail-item">
+            <div class="label">Category</div>
+            <span class="jb-tag jb-tag-cat">{{ job.category }}</span>
+          </div>
+          {% endif %}
+          {% if job.salary_max > 0 %}
+          <div class="jb-detail-item">
+            <div class="label">Salary</div>
+            <div class="jb-salary" style="font-size:15px;">
+              {% if job.salary_min > 0 %}{{ job.salary_currency }} {{ '{:,}'.format(job.salary_min) }} – {{ '{:,}'.format(job.salary_max) }}{% else %}Up to {{ job.salary_currency }} {{ '{:,}'.format(job.salary_max) }}{% endif %}
+              <span style="color:#555;font-size:12px;">/year</span>
+            </div>
+          </div>
+          {% endif %}
+          <div class="jb-detail-item">
+            <div class="label">Posted</div>
+            <div>{{ job.created | timeago }}</div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        {% if job.description %}
+        <div style="margin-top:20px;padding-top:20px;border-top:1px solid #1e1e1e;">
+          <div class="post-body md-content">{{ job.description | markdown }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Apply CTA -->
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid #1e1e1e;">
+          {% if job.apply_url %}
+          <a href="{{ job.apply_url }}" target="_blank" rel="noopener" class="btn btn-primary" style="padding:12px 32px;font-size:15px;">
+            Apply Now ↗
+          </a>
+          {% endif %}
+          <button class="btn btn-ghost" style="margin-left:8px;" onclick="navigator.clipboard.writeText(window.location.href);this.innerHTML='✓ Copied!';setTimeout(()=>this.innerHTML='↗ Share',1500)">↗ Share</button>
+          {% if membership.role in ('owner', 'admin') %}
+          <form method="POST" action="/c/{{ community.slug }}/jobs/{{ job.id }}/delete" style="display:inline;margin-left:8px;" onsubmit="return confirm('Remove this job?')">
+            <button class="btn btn-danger">Remove</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="ch-sidebar">
+      <!-- Company Card -->
+      <div class="ch-sidebar-card" style="text-align:center;">
+        <div style="margin-bottom:8px;">
+          {% if job.company_logo %}
+          <img src="{{ job.company_logo }}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;" />
+          {% else %}
+          <span class="jb-logo-fallback" style="width:48px;height:48px;font-size:20px;margin:0 auto;">{{ job.company[0] | upper }}</span>
+          {% endif %}
+        </div>
+        <div style="font-size:15px;font-weight:600;color:#fff;">{{ job.company }}</div>
+        {% if job.company_url %}
+        <a href="{{ job.company_url }}" target="_blank" rel="noopener" style="font-size:12px;color:#7070e0;">{{ job.company_url | replace('https://', '') | replace('http://', '') }}</a>
+        {% endif %}
+      </div>
+
+      <!-- More Jobs -->
+      {% if other_jobs %}
+      <div class="ch-sidebar-card">
+        <div class="ch-sidebar-title">More Jobs</div>
+        {% for j in other_jobs %}
+        <a href="/c/{{ community.slug }}/jobs/{{ j.id }}" class="ch-sidebar-link">
+          <span style="color:#eee;">{{ j.title }}</span><br>
+          <span style="font-size:11px;color:#555;">{{ j.company }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- CTA -->
+      <div class="ch-sidebar-cta">
+        <div class="ch-cta-title">Join {{ community.name }}</div>
+        <div class="ch-cta-text">Get access to exclusive job listings, discussions, and events.</div>
+        <a href="/join/{{ community.slug }}" class="btn btn-primary" style="width:100%;justify-content:center;">Join Community</a>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
