@@ -820,14 +820,21 @@ def join_community(slug):
     existing = get_membership(session["user_id"], community["id"])
     if existing:
         return redirect(f"/c/{slug}/")
+    invite_err = None
     if request.method == "POST":
+        # Check invite code if community is invite-only
+        if community["invite_only"] and community["invite_code"]:
+            submitted_code = request.form.get("invite_code", "").strip()
+            if submitted_code != community["invite_code"]:
+                invite_err = "Invalid invite code."
+                return render_template("join_community.html", community=community, invite_err=invite_err)
+
         db = get_db()
         now = datetime.utcnow().isoformat()
         db.execute(
             "INSERT INTO memberships (user_id, community_id, role, joined) VALUES (?, ?, ?, ?)",
             (session["user_id"], community["id"], "member", now)
         )
-        # Send welcome notification if community has a welcome message
         if community["welcome_message"]:
             db.execute("""
                 INSERT INTO notifications (user_id, community_id, post_id, type, message, created)
@@ -837,7 +844,7 @@ def join_community(slug):
         db.commit()
         flash(f"Welcome to {community['name']}!", "success")
         return redirect(f"/c/{slug}/")
-    return render_template("join_community.html", community=community)
+    return render_template("join_community.html", community=community, invite_err=invite_err)
 
 # ── Platform: Account ────────────────────────────────────────────
 
@@ -2243,8 +2250,10 @@ def community_update_settings(slug):
                        (f"banners/{banner_name}", community["id"]))
 
     welcome_message = request.form.get("welcome_message", "").strip()
-    db.execute("UPDATE communities SET name=?, description=?, welcome_message=? WHERE id=?",
-               (name, description, welcome_message, community["id"]))
+    invite_only = 1 if request.form.get("invite_only") else 0
+    invite_code = request.form.get("invite_code", "").strip()
+    db.execute("UPDATE communities SET name=?, description=?, welcome_message=?, invite_only=?, invite_code=? WHERE id=?",
+               (name, description, welcome_message, invite_only, invite_code, community["id"]))
     db.commit()
     flash("Settings updated.", "success")
     return redirect(f"/c/{slug}/settings?tab=general")
@@ -3175,6 +3184,58 @@ def terms_page():
 def privacy_page():
     return render_template("legal.html", title="Privacy Policy",
                            content="We collect your name, email, and content you post. We do not sell your data to third parties. Cookies are used for session management only. This is a placeholder — a full privacy policy will be published before public launch.")
+
+@app.route("/account/export")
+@login_required
+def account_export():
+    """GDPR data export — download all your data as JSON."""
+    db = get_db()
+    uid = session["user_id"]
+    user = get_user_by_id(uid)
+
+    data = {
+        "account": {
+            "id": user["id"], "name": user["name"], "email": user["email"],
+            "bio": user["bio"], "location": user["location"], "website": user["website"],
+            "created": user["created"]
+        },
+        "posts": [dict(r) for r in db.execute(
+            "SELECT id, community_id, title, body, category, created FROM posts WHERE user_id = ?", (uid,)).fetchall()],
+        "comments": [dict(r) for r in db.execute(
+            "SELECT id, post_id, body, parent_id, created FROM comments WHERE user_id = ?", (uid,)).fetchall()],
+        "votes": [dict(r) for r in db.execute(
+            "SELECT post_id, value, created FROM votes WHERE user_id = ?", (uid,)).fetchall()],
+        "bookmarks": [dict(r) for r in db.execute(
+            "SELECT post_id, created FROM bookmarks WHERE user_id = ?", (uid,)).fetchall()],
+        "follows": [dict(r) for r in db.execute(
+            "SELECT post_id, created FROM follows WHERE user_id = ?", (uid,)).fetchall()],
+        "rsvps": [dict(r) for r in db.execute(
+            "SELECT event_id, status, created FROM rsvps WHERE user_id = ?", (uid,)).fetchall()],
+        "memberships": [dict(r) for r in db.execute(
+            "SELECT community_id, role, joined FROM memberships WHERE user_id = ?", (uid,)).fetchall()],
+        "poll_responses": [dict(r) for r in db.execute(
+            "SELECT poll_id, question_id, answer, created FROM poll_responses WHERE user_id = ?", (uid,)).fetchall()],
+        "notifications": [dict(r) for r in db.execute(
+            "SELECT community_id, type, message, created FROM notifications WHERE user_id = ? ORDER BY created DESC LIMIT 100", (uid,)).fetchall()],
+        "exported_at": datetime.utcnow().isoformat()
+    }
+
+    return json.dumps(data, indent=2), 200, {
+        "Content-Type": "application/json",
+        "Content-Disposition": f"attachment; filename=my-data-{uid}.json"
+    }
+
+@app.route("/account/delete", methods=["POST"])
+@login_required
+def account_delete():
+    """GDPR right to deletion — delete account and all associated data."""
+    uid = session["user_id"]
+    db = get_db()
+    db.execute("DELETE FROM users WHERE id = ?", (uid,))
+    db.commit()
+    session.clear()
+    flash("Your account and all data have been permanently deleted.", "success")
+    return redirect("/")
 
 # ── Error Handlers ────────────────────────────────────────────────
 

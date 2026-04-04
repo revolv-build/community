@@ -40,5 +40,16 @@
       <button class="btn btn-primary">Update Password</button>
     </form>
   </div>
+
+  <div class="card">
+    <h2>Your Data</h2>
+    <p style="font-size:13px;color:#888;margin-bottom:12px;">Download a copy of all your data or permanently delete your account.</p>
+    <div class="flex gap-8">
+      <a href="/account/export" class="btn btn-ghost">Download My Data (JSON)</a>
+      <form method="POST" action="/account/delete" onsubmit="return confirm('This will permanently delete your account and ALL your data (posts, comments, votes, memberships). This cannot be undone. Are you sure?')">
+        <button class="btn btn-danger">Delete My Account</button>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}

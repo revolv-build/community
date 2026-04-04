@@ -7,9 +7,22 @@
   {% if community.description %}
   <p class="sub">{{ community.description }}</p>
   {% endif %}
+  {% if invite_err %}<div class="msg msg-err">{{ invite_err }}</div>{% endif %}
   <div class="card" style="text-align:left;">
-    <p style="color:#999;font-size:13px;margin-bottom:16px;">You've been invited to join this community. Click below to become a member.</p>
+    <p style="color:#999;font-size:13px;margin-bottom:16px;">
+      {% if community.invite_only %}
+      This is a private community. Enter the invite code to join.
+      {% else %}
+      Click below to become a member.
+      {% endif %}
+    </p>
     <form method="POST">
+      {% if community.invite_only %}
+      <div class="field">
+        <div class="label">Invite Code</div>
+        <input name="invite_code" placeholder="Enter your invite code" required autofocus />
+      </div>
+      {% endif %}
       <button class="btn btn-primary" style="width:100%;justify-content:center;">Join {{ community.name }}</button>
     </form>
   </div>

@@ -37,9 +37,25 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="card empty">
-    <div style="margin-bottom:12px;">You haven't joined any communities yet.</div>
-    <a href="/communities/new" class="btn btn-primary">Create Your First Community</a>
+  <div class="empty-state">
+    <div class="empty-state-icon">&#9672;</div>
+    <h2>Welcome to Community</h2>
+    <p>You're all set up. Now it's time to create your first space or join an existing one.</p>
+    <div class="empty-state-cards">
+      <a href="/communities/new" class="empty-state-card">
+        <div class="empty-state-card-icon">+</div>
+        <div class="empty-state-card-title">Create a Community</div>
+        <div class="empty-state-card-desc">Start your own space with discussions, events, resources, and more.</div>
+      </a>
+      <div class="empty-state-card" style="cursor:default;opacity:0.6;">
+        <div class="empty-state-card-icon">&#8599;</div>
+        <div class="empty-state-card-title">Join a Community</div>
+        <div class="empty-state-card-desc">Got an invite link? Paste it in your browser to join a community.</div>
+      </div>
+    </div>
+    <div style="margin-top:24px;font-size:12px;color:#444;">
+      Need help? <a href="mailto:haydn@revolv.uk" style="color:#7070e0;">Contact support</a>
+    </div>
   </div>
   {% endif %}
 </div>

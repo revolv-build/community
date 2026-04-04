@@ -933,6 +933,33 @@ a.resource-tag:hover { border-color: #444; color: #ccc; }
 .toast-close { background: none; border: none; color: inherit; font-size: 16px; cursor: pointer; opacity: 0.6; padding: 0 4px; }
 .toast-close:hover { opacity: 1; }
 
+/* ── Cookie Banner ────────────────────────────────────────────── */
+.cookie-banner { position: fixed; bottom: 0; left: 0; right: 0; background: #111; border-top: 1px solid #2a2a2a; padding: 12px 24px; display: flex; align-items: center; justify-content: center; gap: 16px; z-index: 999; font-size: 13px; color: #888; }
+
+/* ── Empty State ──────────────────────────────────────────────── */
+.empty-state { text-align: center; padding: 60px 24px; }
+.empty-state-icon { font-size: 48px; color: #7070e0; margin-bottom: 16px; }
+.empty-state h2 { font-size: 22px; color: #fff; margin-bottom: 8px; }
+.empty-state p { font-size: 14px; color: #888; margin-bottom: 32px; max-width: 400px; margin-left: auto; margin-right: auto; line-height: 1.5; }
+.empty-state-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 500px; margin: 0 auto; }
+.empty-state-card { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 24px; text-align: center; transition: border-color .15s; }
+.empty-state-card:hover { border-color: #333; }
+.empty-state-card-icon { font-size: 28px; color: #7070e0; margin-bottom: 10px; }
+.empty-state-card-title { font-size: 14px; font-weight: 600; color: #eee; margin-bottom: 6px; }
+.empty-state-card-desc { font-size: 12px; color: #666; line-height: 1.4; }
+
+/* ── Back to Top ──────────────────────────────────────────────── */
+.back-to-top { position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 50%; color: #666; font-size: 14px; cursor: pointer; z-index: 900; opacity: 0; transform: translateY(20px); transition: all .25s; display: flex; align-items: center; justify-content: center; font-family: inherit; }
+.back-to-top:hover { background: #222; color: #fff; border-color: #444; }
+.btt-show { opacity: 1; transform: translateY(0); }
+
+/* ── Read State ───────────────────────────────────────────────── */
+.qa-read { opacity: 0.55; }
+.qa-read:hover { opacity: 0.85; }
+
+/* ── Keyboard Focus ───────────────────────────────────────────── */
+.qa-focused { border-color: #7070e0 !important; box-shadow: 0 0 0 1px #7070e0; }
+
 /* ── Onboarding Checklist ──────────────────────────────────────── */
 .onboard-card { background: linear-gradient(135deg, #0a1a20 0%, #0a0a14 100%); border: 1px solid #1a2a3a; border-radius: 4px; padding: 18px 20px; }
 .onboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 16px; }

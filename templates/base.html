@@ -69,6 +69,11 @@
     <span class="footer-sep">&middot;</span>
     <a href="mailto:haydn@revolv.uk">Support</a>
   </footer>
+  <div class="cookie-banner" id="cookie-banner" style="display:none;">
+    <span>We use cookies for session management only. No tracking, no ads.</span>
+    <button class="btn btn-primary btn-sm" onclick="document.getElementById('cookie-banner').style.display='none';localStorage.setItem('cookies_ok','1');">Got it</button>
+  </div>
+  <script>if(!localStorage.getItem('cookies_ok'))document.getElementById('cookie-banner').style.display='';</script>
   <script src="{{ url_for('static', filename='csrf.js') }}"></script>
   <script src="{{ url_for('static', filename='toast.js') }}"></script>
 </body>
