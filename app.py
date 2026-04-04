@@ -415,14 +415,30 @@ def login_page():
     if session.get("user_id"):
         return redirect("/dashboard")
     err = None
+    import time as _time
+    form_ts = str(int(_time.time()))
     if request.method == "POST":
+        # Honeypot
+        if request.form.get("website_url", ""):
+            err = "Invalid email or password."
+            return render_template("login.html", err=err, form_ts=form_ts)
+        # Time trap
+        ts = request.form.get("_ts", "0")
+        try:
+            if _time.time() - int(ts) < 1.5:
+                err = "Invalid email or password."
+                return render_template("login.html", err=err, form_ts=form_ts)
+        except (ValueError, TypeError):
+            pass
+
         user = get_user_by_email(request.form.get("email", ""))
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             session["user_id"] = user["id"]
             session["user_name"] = user["name"]
+            session.permanent = True
             return redirect("/dashboard")
         err = "Invalid email or password."
-    return render_template("login.html", err=err)
+    return render_template("login.html", err=err, form_ts=form_ts)
 
 @app.route("/register", methods=["GET", "POST"])
 @limiter.limit("5 per minute", methods=["POST"])
@@ -432,7 +448,24 @@ def register_page():
     err = None
     name = ""
     email = ""
+    import time as _time
+    form_ts = str(int(_time.time()))
     if request.method == "POST":
+        # Honeypot — bots fill this hidden field, humans don't
+        if request.form.get("website_url", ""):
+            err = "Registration failed."
+            return render_template("register.html", err=err, name="", email="", form_ts=form_ts)
+
+        # Time trap — reject forms submitted in under 2 seconds
+        ts = request.form.get("_ts", "0")
+        try:
+            elapsed = _time.time() - int(ts)
+            if elapsed < 2:
+                err = "Please slow down and try again."
+                return render_template("register.html", err=err, name="", email="", form_ts=form_ts)
+        except (ValueError, TypeError):
+            pass
+
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -458,7 +491,7 @@ def register_page():
             session["user_name"] = user["name"]
             flash("Welcome! Create your first community or join one.", "success")
             return redirect("/dashboard")
-    return render_template("register.html", err=err, name=name, email=email)
+    return render_template("register.html", err=err, name=name, email=email, form_ts=form_ts)
 
 @app.route("/logout")
 def logout():

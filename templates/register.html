@@ -6,6 +6,7 @@
   <title>Register - Community</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <style>.hp-field { position:absolute;left:-9999px;opacity:0;height:0;width:0;overflow:hidden;tabindex:-1; }</style>
 </head>
 <body>
 <div class="page-narrow">
@@ -17,8 +18,14 @@
   {% if err %}<div class="msg msg-err">{{ err }}</div>{% endif %}
   <div class="card">
     <form method="POST">
+      <input type="hidden" name="_ts" value="{{ form_ts }}" />
       <div class="field"><div class="label">Name</div><input name="name" placeholder="Your full name" value="{{ name or '' }}" required autofocus /></div>
       <div class="field"><div class="label">Email</div><input name="email" type="email" placeholder="you@example.com" value="{{ email or '' }}" required /></div>
+      <!-- Honeypot — invisible to humans, bots auto-fill it -->
+      <div class="hp-field" aria-hidden="true">
+        <label>Website URL</label>
+        <input name="website_url" type="text" autocomplete="off" tabindex="-1" />
+      </div>
       <div class="field"><div class="label">Password</div><input name="password" type="password" placeholder="Min 8 characters" required /></div>
       <div class="field"><div class="label">Confirm Password</div><input name="password_confirm" type="password" placeholder="Re-enter password" required /></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;">Create Account</button>
